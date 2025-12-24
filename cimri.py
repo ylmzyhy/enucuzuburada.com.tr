@@ -20,14 +20,15 @@ target_count = st.sidebar.slider("Hedeflenen dükkan sayısı", 5, 50, 15)
 
 def init_driver():
     options = Options()
-    options.add_argument("--headless")  # Sunucu için zorunlu
+    options.add_argument("--headless")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-gpu")
     options.add_argument("--window-size=1920,1080")
-    # Streamlit Cloud üzerindeki Chromium yolu
+    # Streamlit Cloud'daki Chromium'un standart yolu
     options.binary_location = "/usr/bin/chromium"
     
+    # Sürücü kurulumunu en güvenli yöntemle yapıyoruz
     service = Service(ChromeDriverManager().install())
     return webdriver.Chrome(service=service, options=options)
 
@@ -36,44 +37,26 @@ def gmaps_search(query, location, limit):
     results = []
     
     try:
-        full_query = f"https://www.google.com/maps/search/{query}+{location}"
-        driver.get(full_query)
+        # Google Haritalar arama linki
+        search_url = f"https://www.google.com/maps/search/{query}+{location}"
+        driver.get(search_url)
         
-        # Sonuçların yüklenmesini bekle
-        wait = WebDriverWait(driver, 10)
+        wait = WebDriverWait(driver, 15)
         
-        # Kaydırma işlemi (Scroll) - Daha fazla sonuç yüklemek için
-        scrollable_div = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "div[role='feed']")))
+        # Sonuçların yüklenmesi için biraz bekle
+        time.sleep(5)
         
-        last_count = 0
-        while len(results) < limit:
-            driver.execute_script('arguments[0].scrollTop = arguments[0].scrollHeight', scrollable_div)
-            time.sleep(2)
-            
-            # Dükkan kartlarını bul
-            places = driver.find_elements(By.CSS_SELECTOR, "div.Nv2Ybe") 
-            
-            for place in places[last_count:]:
-                try:
-                    name = place.find_element(By.CSS_SELECTOR, "div.fontHeadlineSmall").text
-                    try:
-                        rating = place.find_element(By.CSS_SELECTOR, "span.MW4etd").text
-                    except:
-                        rating = "N/A"
-                    
-                    results.append({"Dükkan Adı": name, "Puan": rating})
-                    
-                    if len(results) >= limit:
-                        break
-                except:
-                    continue
-            
-            if len(places) == last_count: # Daha fazla sonuç yüklenmiyorsa dur
-                break
-            last_count = len(places)
+        # Dükkan isimlerini topla
+        # Not: Google seçicileri sık değişebilir, en genel seçiciyi kullanıyoruz
+        places = driver.find_elements(By.CSS_SELECTOR, "div.qBF1Pd")
+        
+        for place in places[:limit]:
+            name = place.text
+            if name:
+                results.append({"Dükkan Adı": name})
 
     except Exception as e:
-        st.error(f"Arama sırasında bir hata oluştu: {e}")
+        st.error(f"Arama sırasında teknik bir sorun oluştu: {e}")
     finally:
         driver.quit()
     
@@ -81,26 +64,24 @@ def gmaps_search(query, location, limit):
 
 # Ana Ekran
 st.title("🕵️‍♂️ Profesyonel Bölgesel Satıcı Kaşifi")
-st.info("Bu araç, belirttiğiniz bölgedeki satıcıları Google Haritalar üzerinden tarayarak size listeler.")
+st.info("Bu araç, belirttiğiniz bölgedeki satıcıları tarayarak size listeler.")
 
 if st.sidebar.button("Derin Taramayı Başlat"):
     if search_query and location_query:
-        with st.spinner(f"{location_query} bölgesinde {search_query} satıcıları aranıyor..."):
+        with st.spinner(f"Arama yapılıyor: {search_query} @ {location_query}..."):
             data = gmaps_search(search_query, location_query, target_count)
             
             if data:
                 df = pd.DataFrame(data)
-                st.success(f"{len(df)} adet dükkan bulundu!")
+                st.success(f"{len(df)} dükkan bulundu!")
                 st.table(df)
                 
-                # CSV İndirme Butonu
                 csv = df.to_csv(index=False).encode('utf-8-sig')
-                st.download_button("Sonuçları Excel (CSV) Olarak İndir", csv, "saticilar.csv", "text/csv")
+                st.download_button("Excel Olarak İndir", csv, "saticilar.csv", "text/csv")
             else:
-                st.warning("Hiç sonuç bulunamadı. Lütfen aramayı daraltın veya farklı anahtar kelimeler deneyin.")
+                st.warning("Sonuç bulunamadı. Lütfen aramayı farklı kelimelerle deneyin.")
     else:
-        st.error("Lütfen hem ürün hem de bölge kısmını doldurun.")
+        st.error("Lütfen tüm alanları doldurun.")
 
-# Alt Bilgi
 st.markdown("---")
-st.caption("© 2025 enucuzuburda.com.tr - Tüm hakları saklıdır.")
+st.caption("© 2025 enucuzuburda.com.tr")
