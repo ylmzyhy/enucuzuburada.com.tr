@@ -7,7 +7,6 @@ from selenium.webdriver.common.keys import Keys
 import pandas as pd
 import time
 
-# Sayfa Genişliği Ayarı
 st.set_page_config(page_title="Satıcı Kaşifi", layout="wide")
 
 def init_driver():
@@ -22,72 +21,81 @@ def init_driver():
 
 def get_details(driver, query, location, limit):
     results = []
-    # Standart Google Maps Arama URL'si
     search_url = f"https://www.google.com/maps/search/{query}+{location}"
     driver.get(search_url)
     time.sleep(5)
 
-    # 1. Aşama: Daha fazla sonuç için aşağı kaydır
+    # Sonuçları yüklemek için kaydır
     try:
         scrollable_div = driver.find_element(By.CSS_SELECTOR, "div[role='feed']")
-        for _ in range(10):
+        for _ in range(8):
             scrollable_div.send_keys(Keys.PAGE_DOWN)
             time.sleep(1)
     except: pass
 
-    # 2. Aşama: Linkleri Topla
     items = driver.find_elements(By.CLASS_NAME, "hfpxzc")
     links = [item.get_attribute("href") for item in items[:limit]]
 
-    # 3. Aşama: Her linkin içine gir ve veri ayıkla
     for link in links:
         try:
             driver.get(link)
             time.sleep(4)
             
-            # İsim
             try: name = driver.find_element(By.CSS_SELECTOR, "h1.DUwDvf").text
             except: name = "Bilinmiyor"
 
-            address = "Bulunamadı"
-            phone = "Bulunamadı"
+            address = "Adres bulunamadı"
+            phone = "Telefon bulunamadı"
             
-            # Google'ın detay kutularını (Io6YTe) tara
-            elements = driver.find_elements(By.CLASS_NAME, "Io6YTe")
-            for el in elements:
-                txt = el.text
-                if not txt: continue
-                
-                # Telefon Kontrolü (Sayısal yoğunluk ve uzunluk)
-                clean_txt = txt.replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
-                if clean_txt.startswith("+") or (clean_txt.isdigit() and len(clean_phone) > 8):
-                    phone = txt
-                # Adres Kontrolü (İçinde mahalle, sokak vb. geçen uzun metinler)
-                elif len(txt) > 15 and any(x in txt.lower() for x in ["mah", "sok", "cad", "no:", "sk", "ist", "türkiye"]):
-                    address = txt
+            # NOKTA ATIŞI: Adres ve Telefon çekme (Google'ın buton etiketlerini kullanıyoruz)
+            try:
+                # Adres butonu genellikle 'Adres: ...' diye bir aria-label içerir
+                addr_element = driver.find_element(By.CSS_SELECTOR, "[data-item-id='address']")
+                address = addr_element.get_attribute("aria-label").replace("Adres: ", "")
+            except:
+                # Yedek adres bulucu (Plus Code olmayan en uzun metni seçer)
+                elements = driver.find_elements(By.CLASS_NAME, "Io6YTe")
+                for el in elements:
+                    txt = el.text
+                    if len(txt) > 25 and "+" not in txt:
+                        address = txt
+                        break
+
+            try:
+                # Telefon butonu 'Telefon: ...' şeklinde bir aria-label içerir
+                phone_element = driver.find_element(By.CSS_SELECTOR, "[data-tooltip='Telefon numarasını kopyalayın']")
+                phone = phone_element.get_attribute("aria-label").replace("Telefon: ", "")
+            except:
+                # Yedek telefon bulucu
+                elements = driver.find_elements(By.CLASS_NAME, "Io6YTe")
+                for el in elements:
+                    txt = el.text.replace(" ", "")
+                    if (txt.startswith("0") or txt.startswith("+")) and len(txt) > 9:
+                        phone = el.text
+                        break
 
             results.append({
                 "Dükkan Adı": name,
                 "Adres": address,
                 "Telefon": phone,
-                "Harita": link # Arka planda tutuyoruz
+                "Harita": link
             })
         except: continue
     return results
 
-# Arayüz Tasarımı
+# Arayüz
 st.title("🕵️‍♂️ Profesyonel Bölgesel Satıcı Kaşifi")
 
 with st.sidebar:
     st.header("🔍 Arama Ayarları")
     search_query = st.text_input("Ne arıyorsunuz?", "Koli Bandı")
     location_query = st.text_input("Hangi bölgede?", "İstoç")
-    target_count = st.slider("Hedeflenen dükkan sayısı", 5, 50, 15)
+    target_count = st.slider("Hedeflenen dükkan sayısı", 5, 50, 10)
     start_button = st.button("Derin Taramayı Başlat")
 
 if start_button:
     if search_query and location_query:
-        with st.spinner("Dükkanlar tek tek analiz ediliyor..."):
+        with st.spinner("Dükkan detayları analiz ediliyor..."):
             driver = init_driver()
             data = get_details(driver, search_query, location_query, target_count)
             driver.quit()
@@ -95,18 +103,15 @@ if start_button:
             if data:
                 df = pd.DataFrame(data)
                 
-                # --- KRİTİK DÜZELTME: LİNKİ BUTONA ÇEVİRME ---
-                # Tablodaki linki tıklanabilir metin yapıyoruz
-                df['Harita'] = df['Harita'].apply(lambda x: f'<a href="{x}" target="_blank">📍 Haritada Gör</a>')
+                # Görsel düzenlemeler
+                df_display = df.copy()
+                df_display['Harita'] = df_display['Harita'].apply(lambda x: f'<a href="{x}" target="_blank">📍 Haritada Gör</a>')
                 
                 st.success(f"{len(df)} dükkan başarıyla listelendi!")
+                st.write(df_display.to_html(escape=False, index=False), unsafe_allow_html=True)
                 
-                # HTML render ederek tabloyu gösteriyoruz (Butonun çalışması için)
-                st.write(df.to_html(escape=False, index=False), unsafe_allow_html=True)
-                
-                # İndirme Butonu (Ham veri için)
                 st.markdown("<br>", unsafe_allow_html=True)
-                csv = pd.DataFrame(data).to_csv(index=False).encode('utf-8-sig')
-                st.download_button("Excel Olarak İndir", csv, "saticilar.csv")
+                csv = df.to_csv(index=False).encode('utf-8-sig')
+                st.download_button("Sonuçları Excel Olarak İndir", csv, "saticilar_listesi.csv")
             else:
                 st.warning("Sonuç bulunamadı.")
