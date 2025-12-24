@@ -3,113 +3,88 @@ from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.keys import Keys
 import pandas as pd
 import time
 
-# Sayfa Yapılandırması
-st.set_page_config(page_title="En Ucuzu Burada - Satıcı Kaşifi", layout="wide")
+# Sayfa Ayarları
+st.set_page_config(page_title="En Ucuzu Burada - Detaylı Satıcı Kaşifi", layout="wide")
 
 def init_driver():
     options = Options()
     options.add_argument("--headless")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--disable-gpu")
     options.add_argument("--window-size=1920,1080")
     options.binary_location = "/usr/bin/chromium"
-    
     service = Service("/usr/bin/chromedriver")
     return webdriver.Chrome(service=service, options=options)
 
-def gmaps_search(query, location, limit):
-    driver = None
+def get_details(driver, query, location, limit):
     results = []
-    
-    try:
-        driver = init_driver()
-        # Google Haritalar arama URL'si
-        search_url = f"https://www.google.com/maps/search/{query}+{location}"
-        driver.get(search_url)
-        
-        # Sayfanın yüklenmesi için bekleme
-        time.sleep(5)
-        
-        # Dükkan kartlarını bul (Haritalar dükkan konteyneri: Nv2Ybe veya hfpxzc)
-        places = driver.find_elements(By.CLASS_NAME, "Nv2Ybe")
-        
-        # Eğer yukarıdaki sınıf değiştiyse yedek sınıfı dene
-        if not places:
-            places = driver.find_elements(By.CLASS_NAME, "hfpxzc")
+    # Arama URL'si
+    search_url = f"https://www.google.com/maps/search/{query}+{location}"
+    driver.get(search_url)
+    time.sleep(5)
 
-        for place in places[:limit]:
-            try:
-                # İsim ve Detaylı Link (Haritalar Linki)
-                # Google genellikle dükkan linkini hfpxzc sınıfındaki 'href' içine koyar
-                link = place.get_attribute("href")
-                name = place.get_attribute("aria-label")
-                
-                # Kart içindeki metni alarak Adres ve Telefonu ayırmaya çalışalım
-                full_text = place.text.split("\n")
-                
-                # Basit bir eşleştirme mantığı:
-                # Genellikle: [İsim, Puan, Adres, Kapalı/Açık, Telefon] şeklinde gelir
-                address = "Bilinmiyor"
-                phone = "Bilinmiyor"
-                
-                for line in full_text:
-                    if "05" in line or "02" in line or "08" in line: # Telefon numarası tespiti
-                        phone = line
-                    elif len(line) > 15 and name not in line: # Uzun metinler genellikle adrestir
-                        address = line
+    # Sayfayı aşağı kaydırarak tüm sonuçları yükle
+    scrollable_div = driver.find_element(By.CSS_SELECTOR, "div[role='feed']")
+    for _ in range(5): # Limit arttıkça bu sayı artırılabilir
+        scrollable_div.send_keys(Keys.PAGE_DOWN)
+        time.sleep(2)
 
-                results.append({
-                    "Dükkan Adı": name,
-                    "Adres": address,
-                    "Telefon": phone,
-                    "Harita Linki": link
-                })
-            except:
-                continue
-                
-    except Exception as e:
-        st.error(f"Teknik bir hata oluştu: {e}")
-    finally:
-        if driver:
-            driver.quit()
+    # Dükkan linklerini topla
+    items = driver.find_elements(By.CLASS_NAME, "hfpxzc")
+    links = [item.get_attribute("href") for item in items[:limit]]
+
+    for link in links:
+        try:
+            driver.get(link)
+            time.sleep(3)
             
+            name = driver.find_element(By.CSS_SELECTOR, "h1.DUwDvf").text
+            
+            # Adres ve Telefonu belirli simgelere göre bulalım
+            try:
+                address = driver.find_element(By.CSS_SELECTOR, "button[data-item-id='address']").get_attribute("aria-label").replace("Adres: ", "")
+            except:
+                address = "Adres bulunamadı"
+                
+            try:
+                phone = driver.find_element(By.CSS_SELECTOR, "button[data-tooltip='Telefon numarasını kopyalayın']").get_attribute("aria-label").replace("Telefon: ", "")
+            except:
+                phone = "Telefon bulunamadı"
+
+            results.append({
+                "Dükkan Adı": name,
+                "Adres": address,
+                "Telefon": phone,
+                "Harita Linki": link
+            })
+        except:
+            continue
     return results
 
-# Arayüz Tasarımı
+# Arayüz
 st.title("🕵️‍♂️ Profesyonel Bölgesel Satıcı Kaşifi")
-st.info("Bu araç, belirttiğiniz bölgedeki satıcıları tarayarak adres ve telefon bilgileriyle listeler.")
-
-# Yan Menü
 st.sidebar.header("🔍 Arama Ayarları")
 search_query = st.sidebar.text_input("Ne arıyorsunuz?", "Koli Bandı")
 location_query = st.sidebar.text_input("Hangi bölgede?", "İstoç")
-target_count = st.sidebar.slider("Hedeflenen dükkan sayısı", 5, 50, 15)
+target_count = st.sidebar.slider("Hedeflenen dükkan sayısı", 5, 30, 15)
 
 if st.sidebar.button("Derin Taramayı Başlat"):
     if search_query and location_query:
-        with st.spinner("Veriler toplanıyor, bu işlem biraz sürebilir..."):
-            data = gmaps_search(search_query, location_query, target_count)
+        with st.spinner("Her dükkanın detayları tek tek analiz ediliyor, lütfen bekleyin..."):
+            driver = init_driver()
+            data = get_details(driver, search_query, location_query, target_count)
+            driver.quit()
             
             if data:
                 df = pd.DataFrame(data)
-                st.success(f"{len(df)} dükkan bilgisi başarıyla çekildi!")
-                
-                # Tabloyu göster
+                st.success(f"{len(df)} dükkan bilgisi tüm detaylarıyla çekildi!")
                 st.dataframe(df, use_container_width=True)
-                
-                # Excel/CSV İndirme
-                csv = df.to_csv(index=False).encode('utf-8-sig')
-                st.download_button("Excel (CSV) Olarak İndir", csv, "saticilar_detayli.csv", "text/csv")
+                st.download_button("Excel Olarak İndir", df.to_csv(index=False).encode('utf-8-sig'), "detayli_saticilar.csv")
             else:
-                st.warning("Sonuç bulunamadı. Lütfen arama kelimelerini (Örn: 'Koli Bandı Toptan') zenginleştirin.")
+                st.warning("Sonuç bulunamadı.")
     else:
-        st.error("Lütfen tüm alanları doldurun.")
-
-st.markdown("---")
-st.caption("© 2025 enucuzuburda.com.tr")
+        st.error("Lütfen alanları doldurun.")
