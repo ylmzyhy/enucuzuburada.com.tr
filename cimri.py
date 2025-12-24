@@ -5,18 +5,11 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from webdriver_manager.chrome import ChromeDriverManager
 import pandas as pd
 import time
 
 # Sayfa Yapılandırması
 st.set_page_config(page_title="En Ucuzu Burada - Satıcı Kaşifi", layout="wide")
-
-# Sidebar - Arama Ayarları
-st.sidebar.header("🔍 Arama Ayarları")
-search_query = st.sidebar.text_input("Ne arıyorsunuz?", placeholder="Örn: Koli Bandı")
-location_query = st.sidebar.text_input("Hangi bölgede?", placeholder="Örn: İstoç")
-target_count = st.sidebar.slider("Hedeflenen dükkan sayısı", 5, 50, 15)
 
 def init_driver():
     options = Options()
@@ -25,61 +18,70 @@ def init_driver():
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-gpu")
     options.add_argument("--window-size=1920,1080")
-    # Streamlit Cloud'daki Chromium'un standart yolu
+    
+    # Streamlit Cloud'da Chromium'un standart yolu
     options.binary_location = "/usr/bin/chromium"
     
-    # Sürücü kurulumunu en güvenli yöntemle yapıyoruz
-    service = Service(ChromeDriverManager().install())
+    # Sürücüyü sisteme kurulu olan chromium-driver üzerinden başlatıyoruz
+    service = Service("/usr/bin/chromedriver")
+    
     return webdriver.Chrome(service=service, options=options)
 
 def gmaps_search(query, location, limit):
-    driver = init_driver()
+    driver = None
     results = []
     
     try:
-        # Google Haritalar arama linki
+        driver = init_driver()
+        # Google Haritalar arama URL'si
         search_url = f"https://www.google.com/maps/search/{query}+{location}"
         driver.get(search_url)
         
+        # Sayfanın yüklenmesi için bekleme
         wait = WebDriverWait(driver, 15)
         
-        # Sonuçların yüklenmesi için biraz bekle
+        # Dükkan isimlerini bul (Google'ın güncel dükkan başlığı sınıfı: qBF1Pd)
         time.sleep(5)
-        
-        # Dükkan isimlerini topla
-        # Not: Google seçicileri sık değişebilir, en genel seçiciyi kullanıyoruz
-        places = driver.find_elements(By.CSS_SELECTOR, "div.qBF1Pd")
+        places = driver.find_elements(By.CLASS_NAME, "qBF1Pd")
         
         for place in places[:limit]:
             name = place.text
             if name:
                 results.append({"Dükkan Adı": name})
-
+                
     except Exception as e:
-        st.error(f"Arama sırasında teknik bir sorun oluştu: {e}")
+        st.error(f"Teknik bir hata oluştu: {e}")
     finally:
-        driver.quit()
-    
+        if driver:
+            driver.quit()
+            
     return results
 
-# Ana Ekran
+# Arayüz Tasarımı
 st.title("🕵️‍♂️ Profesyonel Bölgesel Satıcı Kaşifi")
 st.info("Bu araç, belirttiğiniz bölgedeki satıcıları tarayarak size listeler.")
 
+# Yan Menü (Sidebar)
+st.sidebar.header("🔍 Arama Ayarları")
+search_query = st.sidebar.text_input("Ne arıyorsunuz?", "Koli Bandı")
+location_query = st.sidebar.text_input("Hangi bölgede?", "İstoç")
+target_count = st.sidebar.slider("Hedeflenen dükkan sayısı", 5, 50, 15)
+
 if st.sidebar.button("Derin Taramayı Başlat"):
     if search_query and location_query:
-        with st.spinner(f"Arama yapılıyor: {search_query} @ {location_query}..."):
+        with st.spinner(f"{location_query} bölgesinde {search_query} satıcıları taranıyor..."):
             data = gmaps_search(search_query, location_query, target_count)
             
             if data:
                 df = pd.DataFrame(data)
-                st.success(f"{len(df)} dükkan bulundu!")
+                st.success(f"{len(df)} dükkan başarıyla listelendi!")
                 st.table(df)
                 
+                # Excel/CSV İndirme
                 csv = df.to_csv(index=False).encode('utf-8-sig')
-                st.download_button("Excel Olarak İndir", csv, "saticilar.csv", "text/csv")
+                st.download_button("Sonuçları İndir", csv, "saticilar.csv", "text/csv")
             else:
-                st.warning("Sonuç bulunamadı. Lütfen aramayı farklı kelimelerle deneyin.")
+                st.warning("Sonuç bulunamadı. Lütfen arama kelimelerini kontrol edin.")
     else:
         st.error("Lütfen tüm alanları doldurun.")
 
