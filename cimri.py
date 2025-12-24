@@ -18,13 +18,9 @@ def init_driver():
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-gpu")
     options.add_argument("--window-size=1920,1080")
-    
-    # Streamlit Cloud'da Chromium'un standart yolu
     options.binary_location = "/usr/bin/chromium"
     
-    # Sürücüyü sisteme kurulu olan chromium-driver üzerinden başlatıyoruz
     service = Service("/usr/bin/chromedriver")
-    
     return webdriver.Chrome(service=service, options=options)
 
 def gmaps_search(query, location, limit):
@@ -38,16 +34,44 @@ def gmaps_search(query, location, limit):
         driver.get(search_url)
         
         # Sayfanın yüklenmesi için bekleme
-        wait = WebDriverWait(driver, 15)
-        
-        # Dükkan isimlerini bul (Google'ın güncel dükkan başlığı sınıfı: qBF1Pd)
         time.sleep(5)
-        places = driver.find_elements(By.CLASS_NAME, "qBF1Pd")
         
+        # Dükkan kartlarını bul (Haritalar dükkan konteyneri: Nv2Ybe veya hfpxzc)
+        places = driver.find_elements(By.CLASS_NAME, "Nv2Ybe")
+        
+        # Eğer yukarıdaki sınıf değiştiyse yedek sınıfı dene
+        if not places:
+            places = driver.find_elements(By.CLASS_NAME, "hfpxzc")
+
         for place in places[:limit]:
-            name = place.text
-            if name:
-                results.append({"Dükkan Adı": name})
+            try:
+                # İsim ve Detaylı Link (Haritalar Linki)
+                # Google genellikle dükkan linkini hfpxzc sınıfındaki 'href' içine koyar
+                link = place.get_attribute("href")
+                name = place.get_attribute("aria-label")
+                
+                # Kart içindeki metni alarak Adres ve Telefonu ayırmaya çalışalım
+                full_text = place.text.split("\n")
+                
+                # Basit bir eşleştirme mantığı:
+                # Genellikle: [İsim, Puan, Adres, Kapalı/Açık, Telefon] şeklinde gelir
+                address = "Bilinmiyor"
+                phone = "Bilinmiyor"
+                
+                for line in full_text:
+                    if "05" in line or "02" in line or "08" in line: # Telefon numarası tespiti
+                        phone = line
+                    elif len(line) > 15 and name not in line: # Uzun metinler genellikle adrestir
+                        address = line
+
+                results.append({
+                    "Dükkan Adı": name,
+                    "Adres": address,
+                    "Telefon": phone,
+                    "Harita Linki": link
+                })
+            except:
+                continue
                 
     except Exception as e:
         st.error(f"Teknik bir hata oluştu: {e}")
@@ -59,9 +83,9 @@ def gmaps_search(query, location, limit):
 
 # Arayüz Tasarımı
 st.title("🕵️‍♂️ Profesyonel Bölgesel Satıcı Kaşifi")
-st.info("Bu araç, belirttiğiniz bölgedeki satıcıları tarayarak size listeler.")
+st.info("Bu araç, belirttiğiniz bölgedeki satıcıları tarayarak adres ve telefon bilgileriyle listeler.")
 
-# Yan Menü (Sidebar)
+# Yan Menü
 st.sidebar.header("🔍 Arama Ayarları")
 search_query = st.sidebar.text_input("Ne arıyorsunuz?", "Koli Bandı")
 location_query = st.sidebar.text_input("Hangi bölgede?", "İstoç")
@@ -69,19 +93,21 @@ target_count = st.sidebar.slider("Hedeflenen dükkan sayısı", 5, 50, 15)
 
 if st.sidebar.button("Derin Taramayı Başlat"):
     if search_query and location_query:
-        with st.spinner(f"{location_query} bölgesinde {search_query} satıcıları taranıyor..."):
+        with st.spinner("Veriler toplanıyor, bu işlem biraz sürebilir..."):
             data = gmaps_search(search_query, location_query, target_count)
             
             if data:
                 df = pd.DataFrame(data)
-                st.success(f"{len(df)} dükkan başarıyla listelendi!")
-                st.table(df)
+                st.success(f"{len(df)} dükkan bilgisi başarıyla çekildi!")
+                
+                # Tabloyu göster
+                st.dataframe(df, use_container_width=True)
                 
                 # Excel/CSV İndirme
                 csv = df.to_csv(index=False).encode('utf-8-sig')
-                st.download_button("Sonuçları İndir", csv, "saticilar.csv", "text/csv")
+                st.download_button("Excel (CSV) Olarak İndir", csv, "saticilar_detayli.csv", "text/csv")
             else:
-                st.warning("Sonuç bulunamadı. Lütfen arama kelimelerini kontrol edin.")
+                st.warning("Sonuç bulunamadı. Lütfen arama kelimelerini (Örn: 'Koli Bandı Toptan') zenginleştirin.")
     else:
         st.error("Lütfen tüm alanları doldurun.")
 
