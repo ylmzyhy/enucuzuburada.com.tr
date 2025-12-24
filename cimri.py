@@ -1,12 +1,17 @@
-import streamlit as st
-from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.common.by import By
-from selenium.webdriver.chrome.options import Options
 from webdriver_manager.chrome import ChromeDriverManager
-import pandas as pd
-import time
-import re
+
+options = webdriver.ChromeOptions()
+options.add_argument("--headless")
+options.add_argument("--no-sandbox")
+options.add_argument("--disable-dev-shm-usage")
+options.add_argument("--disable-gpu")
+# Sunucudaki Chromium'un yerini tam olarak gösteriyoruz:
+options.binary_location = "/usr/bin/chromium" 
+
+# Sürücüyü bu ayarlar ve Service kullanarak başlatıyoruz:
+service = Service(ChromeDriverManager().install())
+driver = webdriver.Chrome(service=service, options=options)
 
 # Sayfa Yapılandırması
 st.set_page_config(page_title="Piyasa Dedektifi v5", layout="wide")
@@ -119,4 +124,5 @@ if ara_butonu:
         except Exception as e:
             st.error(f"Sistem Hatası: {e}")
         finally:
+
             driver.quit()
