@@ -23,40 +23,47 @@ def get_details(driver, query, location, limit):
     results = []
     search_url = f"https://www.google.com/maps/search/{query}+{location}"
     driver.get(search_url)
-    time.sleep(6) # İlk yükleme için uzun bekleme
+    time.sleep(5)
 
-    # SONUÇ SAYISINI ARTIRMAK İÇİN KAYDIRMA (SCROLL)
-    scrollable_div = driver.find_element(By.CSS_SELECTOR, "div[role='feed']")
-    for _ in range(8): # Daha fazla kaydırarak daha çok sonuç yüklemesini sağlıyoruz
-        scrollable_div.send_keys(Keys.PAGE_DOWN)
-        time.sleep(1.5)
+    # DAHA FAZLA SONUÇ İÇİN DERİN KAYDIRMA
+    try:
+        scrollable_div = driver.find_element(By.CSS_SELECTOR, "div[role='feed']")
+        for _ in range(12): # Kaydırma sayısını artırdık
+            scrollable_div.send_keys(Keys.PAGE_DOWN)
+            time.sleep(1.5)
+    except:
+        pass
 
-    # Linkleri topla
+    # Tüm dükkan linklerini topla
     items = driver.find_elements(By.CLASS_NAME, "hfpxzc")
     links = [item.get_attribute("href") for item in items[:limit]]
 
     for link in links:
         try:
             driver.get(link)
-            time.sleep(4) # Verilerin yüklenmesi için kritik bekleme süresi
+            time.sleep(4)
             
-            # İsim Çekme
+            # İsim
             try:
                 name = driver.find_element(By.CSS_SELECTOR, "h1.DUwDvf").text
             except:
                 name = "Bilinmiyor"
 
-            # ADRES VE TELEFON İÇİN GENEL TARAMA
-            # Google'ın buton yapıları değişse bile metinden yakalama
             address = "Adres bulunamadı"
             phone = "Telefon bulunamadı"
             
-            elements = driver.find_elements(By.CLASS_NAME, "Io6YTe") # Google'ın tüm detay satırları
+            # Tüm detay satırlarını tara (Io6YTe sınıfı)
+            elements = driver.find_elements(By.CLASS_NAME, "Io6YTe")
             for el in elements:
                 text = el.text
-                if "+" in text or (text.replace(" ", "").isdigit() and len(text) > 8): # Telefon tespiti
+                if not text: continue
+                
+                # Telefon tespiti: Rakamlardan oluşmalı veya + ile başlamalı
+                clean_text = text.replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
+                if clean_text.startswith("+") or (clean_text.isdigit() and len(clean_text) > 7):
                     phone = text
-                elif len(text) > 20 and any(char.isdigit() for char in text): # Adres tespiti
+                # Adres tespiti: Uzun metin ve içinde genellikle mahalle, sokak, no geçer
+                elif len(text) > 15 and any(kw in text.lower() for kw in ["mah", "sok", "cad", "no:", "sk", "istanbul", "türkiye"]):
                     address = text
 
             results.append({
@@ -65,7 +72,7 @@ def get_details(driver, query, location, limit):
                 "Telefon": phone,
                 "Harita Linki": link
             })
-        except Exception as e:
+        except:
             continue
     return results
 
@@ -78,7 +85,7 @@ target_count = st.sidebar.slider("Hedeflenen dükkan sayısı", 5, 50, 15)
 
 if st.sidebar.button("Derin Taramayı Başlat"):
     if search_query and location_query:
-        with st.spinner("Detaylı veriler çekiliyor (Her dükkan için yaklaşık 5 saniye sürer)..."):
+        with st.spinner(f"Veriler çekiliyor. Toplam {target_count} dükkan hedefleniyor..."):
             driver = init_driver()
             data = get_details(driver, search_query, location_query, target_count)
             driver.quit()
@@ -87,8 +94,6 @@ if st.sidebar.button("Derin Taramayı Başlat"):
                 df = pd.DataFrame(data)
                 st.success(f"{len(df)} dükkan başarıyla listelendi!")
                 st.dataframe(df, use_container_width=True)
-                
-                # Excel/CSV İndirme
-                st.download_button("Sonuçları Excel Olarak İndir", df.to_csv(index=False).encode('utf-8-sig'), "saticilar_liste.csv")
+                st.download_button("Excel Olarak İndir", df.to_csv(index=False).encode('utf-8-sig'), "saticilar_liste.csv")
             else:
                 st.warning("Sonuç bulunamadı.")
