@@ -7,7 +7,8 @@ from selenium.webdriver.common.keys import Keys
 import pandas as pd
 import time
 
-st.set_page_config(page_title="En Ucuzu Burada - Profesyonel Tarayıcı", layout="wide")
+# Sayfa Genişliği Ayarı
+st.set_page_config(page_title="Satıcı Kaşifi", layout="wide")
 
 def init_driver():
     options = Options()
@@ -21,84 +22,91 @@ def init_driver():
 
 def get_details(driver, query, location, limit):
     results = []
+    # Standart Google Maps Arama URL'si
     search_url = f"https://www.google.com/maps/search/{query}+{location}"
     driver.get(search_url)
     time.sleep(5)
 
-    # DAHA FAZLA SONUÇ İÇİN KAYDIRMA
+    # 1. Aşama: Daha fazla sonuç için aşağı kaydır
     try:
         scrollable_div = driver.find_element(By.CSS_SELECTOR, "div[role='feed']")
-        for _ in range(15): 
+        for _ in range(10):
             scrollable_div.send_keys(Keys.PAGE_DOWN)
-            time.sleep(1.5)
-    except:
-        pass
+            time.sleep(1)
+    except: pass
 
-    # Linkleri topla - Harita linklerinin tam gelmesi için 'hfpxzc' sınıfını kullanıyoruz
+    # 2. Aşama: Linkleri Topla
     items = driver.find_elements(By.CLASS_NAME, "hfpxzc")
-    links = []
-    for item in items[:limit]:
-        l = item.get_attribute("href")
-        if l: links.append(l)
+    links = [item.get_attribute("href") for item in items[:limit]]
 
+    # 3. Aşama: Her linkin içine gir ve veri ayıkla
     for link in links:
         try:
             driver.get(link)
-            time.sleep(4) # Verilerin tam yüklenmesi için kritik bekleme
+            time.sleep(4)
             
-            # Dükkan İsmi
-            try:
-                name = driver.find_element(By.CSS_SELECTOR, "h1.DUwDvf").text
-            except:
-                name = "Bilinmiyor"
+            # İsim
+            try: name = driver.find_element(By.CSS_SELECTOR, "h1.DUwDvf").text
+            except: name = "Bilinmiyor"
 
-            address = "Adres bulunamadı"
-            phone = "Telefon bulunamadı"
+            address = "Bulunamadı"
+            phone = "Bulunamadı"
             
-            # Tüm detay butonlarını tara
+            # Google'ın detay kutularını (Io6YTe) tara
             elements = driver.find_elements(By.CLASS_NAME, "Io6YTe")
             for el in elements:
-                text = el.text
-                if not text: continue
+                txt = el.text
+                if not txt: continue
                 
-                # Telefon tespiti
-                clean_phone = text.replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
-                if clean_phone.startswith("+") or (clean_phone.isdigit() and len(clean_phone) > 8):
-                    phone = text
-                # Adres tespiti (Şehir veya mahalle isimlerini kontrol eder)
-                elif len(text) > 15 and any(kw in text.lower() for kw in ["mah", "sok", "cad", "no:", "sk.", "istanbul", "türkiye"]):
-                    address = text
+                # Telefon Kontrolü (Sayısal yoğunluk ve uzunluk)
+                clean_txt = txt.replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
+                if clean_txt.startswith("+") or (clean_txt.isdigit() and len(clean_phone) > 8):
+                    phone = txt
+                # Adres Kontrolü (İçinde mahalle, sokak vb. geçen uzun metinler)
+                elif len(txt) > 15 and any(x in txt.lower() for x in ["mah", "sok", "cad", "no:", "sk", "ist", "türkiye"]):
+                    address = txt
 
             results.append({
                 "Dükkan Adı": name,
                 "Adres": address,
                 "Telefon": phone,
-                "Harita Linki": link # Tam Google Maps URL'si
+                "Harita": link # Arka planda tutuyoruz
             })
-        except:
-            continue
+        except: continue
     return results
 
-# Arayüz
+# Arayüz Tasarımı
 st.title("🕵️‍♂️ Profesyonel Bölgesel Satıcı Kaşifi")
-st.sidebar.header("🔍 Arama Ayarları")
-search_query = st.sidebar.text_input("Ne arıyorsunuz?", "Koli Bandı")
-location_query = st.sidebar.text_input("Hangi bölgede?", "İstoç")
-target_count = st.sidebar.slider("Hedeflenen dükkan sayısı", 5, 50, 15)
 
-if st.sidebar.button("Derin Taramayı Başlat"):
+with st.sidebar:
+    st.header("🔍 Arama Ayarları")
+    search_query = st.text_input("Ne arıyorsunuz?", "Koli Bandı")
+    location_query = st.text_input("Hangi bölgede?", "İstoç")
+    target_count = st.slider("Hedeflenen dükkan sayısı", 5, 50, 15)
+    start_button = st.button("Derin Taramayı Başlat")
+
+if start_button:
     if search_query and location_query:
-        with st.spinner(f"Veriler toplanıyor... Lütfen sayfayı kapatmayın."):
+        with st.spinner("Dükkanlar tek tek analiz ediliyor..."):
             driver = init_driver()
             data = get_details(driver, search_query, location_query, target_count)
             driver.quit()
             
             if data:
                 df = pd.DataFrame(data)
-                st.success(f"{len(df)} dükkan bilgisi başarıyla çekildi!")
-                st.dataframe(df, use_container_width=True)
-                st.download_button("Excel Olarak İndir", df.to_csv(index=False).encode('utf-8-sig'), "saticilar_liste.csv")
+                
+                # --- KRİTİK DÜZELTME: LİNKİ BUTONA ÇEVİRME ---
+                # Tablodaki linki tıklanabilir metin yapıyoruz
+                df['Harita'] = df['Harita'].apply(lambda x: f'<a href="{x}" target="_blank">📍 Haritada Gör</a>')
+                
+                st.success(f"{len(df)} dükkan başarıyla listelendi!")
+                
+                # HTML render ederek tabloyu gösteriyoruz (Butonun çalışması için)
+                st.write(df.to_html(escape=False, index=False), unsafe_allow_html=True)
+                
+                # İndirme Butonu (Ham veri için)
+                st.markdown("<br>", unsafe_allow_html=True)
+                csv = pd.DataFrame(data).to_csv(index=False).encode('utf-8-sig')
+                st.download_button("Excel Olarak İndir", csv, "saticilar.csv")
             else:
                 st.warning("Sonuç bulunamadı.")
-    else:
-        st.error("Lütfen alanları doldurun.")
