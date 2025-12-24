@@ -25,25 +25,28 @@ def get_details(driver, query, location, limit):
     driver.get(search_url)
     time.sleep(5)
 
-    # DAHA FAZLA SONUÇ İÇİN DERİN KAYDIRMA
+    # DAHA FAZLA SONUÇ İÇİN KAYDIRMA
     try:
         scrollable_div = driver.find_element(By.CSS_SELECTOR, "div[role='feed']")
-        for _ in range(12): # Kaydırma sayısını artırdık
+        for _ in range(15): 
             scrollable_div.send_keys(Keys.PAGE_DOWN)
             time.sleep(1.5)
     except:
         pass
 
-    # Tüm dükkan linklerini topla
+    # Linkleri topla - Harita linklerinin tam gelmesi için 'hfpxzc' sınıfını kullanıyoruz
     items = driver.find_elements(By.CLASS_NAME, "hfpxzc")
-    links = [item.get_attribute("href") for item in items[:limit]]
+    links = []
+    for item in items[:limit]:
+        l = item.get_attribute("href")
+        if l: links.append(l)
 
     for link in links:
         try:
             driver.get(link)
-            time.sleep(4)
+            time.sleep(4) # Verilerin tam yüklenmesi için kritik bekleme
             
-            # İsim
+            # Dükkan İsmi
             try:
                 name = driver.find_element(By.CSS_SELECTOR, "h1.DUwDvf").text
             except:
@@ -52,25 +55,25 @@ def get_details(driver, query, location, limit):
             address = "Adres bulunamadı"
             phone = "Telefon bulunamadı"
             
-            # Tüm detay satırlarını tara (Io6YTe sınıfı)
+            # Tüm detay butonlarını tara
             elements = driver.find_elements(By.CLASS_NAME, "Io6YTe")
             for el in elements:
                 text = el.text
                 if not text: continue
                 
-                # Telefon tespiti: Rakamlardan oluşmalı veya + ile başlamalı
-                clean_text = text.replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
-                if clean_text.startswith("+") or (clean_text.isdigit() and len(clean_text) > 7):
+                # Telefon tespiti
+                clean_phone = text.replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
+                if clean_phone.startswith("+") or (clean_phone.isdigit() and len(clean_phone) > 8):
                     phone = text
-                # Adres tespiti: Uzun metin ve içinde genellikle mahalle, sokak, no geçer
-                elif len(text) > 15 and any(kw in text.lower() for kw in ["mah", "sok", "cad", "no:", "sk", "istanbul", "türkiye"]):
+                # Adres tespiti (Şehir veya mahalle isimlerini kontrol eder)
+                elif len(text) > 15 and any(kw in text.lower() for kw in ["mah", "sok", "cad", "no:", "sk.", "istanbul", "türkiye"]):
                     address = text
 
             results.append({
                 "Dükkan Adı": name,
                 "Adres": address,
                 "Telefon": phone,
-                "Harita Linki": link
+                "Harita Linki": link # Tam Google Maps URL'si
             })
         except:
             continue
@@ -85,15 +88,17 @@ target_count = st.sidebar.slider("Hedeflenen dükkan sayısı", 5, 50, 15)
 
 if st.sidebar.button("Derin Taramayı Başlat"):
     if search_query and location_query:
-        with st.spinner(f"Veriler çekiliyor. Toplam {target_count} dükkan hedefleniyor..."):
+        with st.spinner(f"Veriler toplanıyor... Lütfen sayfayı kapatmayın."):
             driver = init_driver()
             data = get_details(driver, search_query, location_query, target_count)
             driver.quit()
             
             if data:
                 df = pd.DataFrame(data)
-                st.success(f"{len(df)} dükkan başarıyla listelendi!")
+                st.success(f"{len(df)} dükkan bilgisi başarıyla çekildi!")
                 st.dataframe(df, use_container_width=True)
                 st.download_button("Excel Olarak İndir", df.to_csv(index=False).encode('utf-8-sig'), "saticilar_liste.csv")
             else:
                 st.warning("Sonuç bulunamadı.")
+    else:
+        st.error("Lütfen alanları doldurun.")
