@@ -7,17 +7,40 @@ st.set_page_config(page_title="En Ucuzu Burada", page_icon="🛒", layout="wide"
 # 2. API ANAHTARIN
 API_KEY = "AIzaSyDF9hKdF-D7atJJDqV-h56wlB7vgt9eqJE"
 
-# 3. LOGO VE ÜST KISIM
-col1, col2, col3 = st.columns([1, 2, 1])
-with col2:
-    try:
-        st.image("logo.png", use_container_width=True)
-    except:
-        st.title("🛒 En Ucuzu Burada")
+# 3. ÖZEL TASARIM (CSS) - Her şeyi derli toplu yapar
+st.markdown("""
+<style>
+    /* Ana başlık ve yazı boyutlarını küçült */
+    h3 { font-size: 1.1rem !important; font-weight: bold; color: #333; margin-bottom: 5px; }
+    p { font-size: 0.9rem !important; margin-bottom: 2px; }
+    
+    /* Dükkan kutularını (Card) özelleştir */
+    .dukkan-kart {
+        border: 1px solid #eee;
+        padding: 15px;
+        border-radius: 12px;
+        background-color: #ffffff;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        height: 100%;
+        transition: 0.3s;
+    }
+    .dukkan-kart:hover { border-color: #f39233; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+    
+    /* Arama çubuğu alanını daralt */
+    .stTextInput > div > div > input { padding: 8px; }
+</style>
+""", unsafe_allow_all_html=True)
 
-# 4. FONKSİYONLAR
+# 4. ÜST KISIM (LOGO)
+c1, c2, c3 = st.columns([1, 1, 1])
+with c2:
+    try:
+        st.image("logo.png", width=180) # Logo boyutunu biraz küçülttük
+    except:
+        st.title("En Ucuzu Burada")
+
+# 5. FONKSİYONLAR
 def dukkan_ara(urun, lokasyon):
-    # Kullanıcının girdiği ürün ve lokasyonu birleştiriyoruz
     sorgu = f"{urun} {lokasyon}"
     url = f"https://maps.googleapis.com/maps/api/place/textsearch/json?query={sorgu}&key={API_KEY}&language=tr"
     response = requests.get(url).json()
@@ -28,49 +51,45 @@ def telefon_bul(place_id):
     res = requests.get(url).json()
     return res.get('result', {}).get('formatted_phone_number', '')
 
-# 5. ARAYÜZ (İKİLİ ARAMA KUTUSU)
-st.write("---")
-col_arama, col_yer = st.columns([2, 1]) # Ürün kutusu daha geniş, yer kutusu daha dar
+# 6. ARAMA ALANI (Daha kompakt)
+with st.container():
+    col_arama, col_yer = st.columns([2, 1])
+    with col_arama:
+        arama = st.text_input("Ürün adı", placeholder="Matkap, Vida...", label_visibility="collapsed")
+    with col_yer:
+        yer = st.text_input("Konum", value="İstoç", label_visibility="collapsed")
+    
+    ara_btn = st.button("Dükkanları Listele", use_container_width=True)
 
-with col_arama:
-    arama = st.text_input("Ne arıyorsunuz?", placeholder="Örn: Dübel, Bant, Matkap...")
-
-with col_yer:
-    yer = st.text_input("Nerede?", value="İstoç", placeholder="İl veya ilçe yazın...")
-
-if st.button("Dükkanları Bul", use_container_width=True):
+# 7. SONUÇLARI GÖSTER (Grid / Yan yana yapı)
+if ara_btn:
     if arama:
-        with st.spinner(f'{yer} bölgesinde {arama} aranıyor...'):
+        with st.spinner('Sonuçlar yükleniyor...'):
             sonuclar = dukkan_ara(arama, yer)
             if sonuclar:
-                st.success(f"'{yer}' bölgesinde {len(sonuclar)} dükkan bulundu.")
-                for dukkan in sonuclar:
-                    isim = dukkan.get('name')
-                    adres = dukkan.get('formatted_address')
-                    puan = dukkan.get('rating', 'Yok')
-                    place_id = dukkan.get('place_id')
-                    
-                    with st.container():
-                        st.subheader(f"🏢 {isim}")
-                        st.write(f"📍 **Adres:** {adres}")
-                        st.write(f"⭐ **Puan:** {puan}")
-                        
-                        c1, c2 = st.columns(2)
-                        with c1:
-                            harita_url = f"https://www.google.com/maps/search/?api=1&query={isim.replace(' ', '+')}&query_place_id={place_id}"
-                            st.link_button("📍 Haritada Gör", harita_url, use_container_width=True)
-                        with c2:
-                            tel = telefon_bul(place_id)
-                            wa_msg = f"Merhaba, {arama} fiyatını öğrenmek istiyorum."
-                            if tel:
-                                wa_link = f"https://wa.me/{tel.replace(' ', '').replace('+', '')}?text={wa_msg}"
-                                st.link_button("💬 WhatsApp'tan Sor", wa_link, type="primary", use_container_width=True)
-                            else:
-                                st.info("📞 Telefon Bulunamadı")
-                        st.divider()
-            else:
-                st.warning(f"'{yer}' bölgesinde bu ürün için dükkan bulunamadı.")
-    else:
-        st.error("Lütfen bir ürün adı yazın.")
-
-st.caption("© 2025 enucuzuburada.com.tr")
+                st.success(f"{len(sonuclar)} dükkan listelendi.")
+                
+                # Her satırda 2 veya 3 dükkan göstermek için döngü
+                for i in range(0, len(sonuclar), 2):
+                    cols = st.columns(2) # Satırda 2 dükkan yan yana
+                    for j in range(2):
+                        if i + j < len(sonuclar):
+                            dukkan = sonuclar[i+j]
+                            isim = dukkan.get('name')
+                            adres = dukkan.get('formatted_address')[:60] + "..." # Adresi kısalttık
+                            puan = dukkan.get('rating', 'Yok')
+                            place_id = dukkan.get('place_id')
+                            
+                            with cols[j]:
+                                # Kart yapısını başlat
+                                st.markdown(f"""
+                                <div class="dukkan-kart">
+                                    <h3>🏢 {isim}</h3>
+                                    <p>📍 {adres}</p>
+                                    <p>⭐ Puan: {puan}</p>
+                                </div>
+                                """, unsafe_allow_all_html=True)
+                                
+                                # Butonlar (Streamlit'in kendi butonlarını kartın altına koyuyoruz)
+                                b1, b2 = st.columns(2)
+                                with b1
