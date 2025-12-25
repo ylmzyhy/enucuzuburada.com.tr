@@ -7,37 +7,38 @@ st.set_page_config(page_title="En Ucuzu Burada", page_icon="🛒", layout="wide"
 # 2. API ANAHTARIN
 API_KEY = "AIzaSyDF9hKdF-D7atJJDqV-h56wlB7vgt9eqJE"
 
-# 3. ÖZEL TASARIM (CSS) - Her şeyi derli toplu yapar
+# 3. ÖZEL TASARIM (CSS)
 st.markdown("""
 <style>
-    /* Ana başlık ve yazı boyutlarını küçült */
-    h3 { font-size: 1.1rem !important; font-weight: bold; color: #333; margin-bottom: 5px; }
-    p { font-size: 0.9rem !important; margin-bottom: 2px; }
+    /* Başlıkları ve metinleri küçült */
+    h3 { font-size: 1rem !important; font-weight: bold; margin-bottom: 2px; }
+    p { font-size: 0.85rem !important; margin-bottom: 2px; line-height: 1.2; }
     
-    /* Dükkan kutularını (Card) özelleştir */
+    /* Dükkan kutularını daha kompakt yap */
     .dukkan-kart {
         border: 1px solid #eee;
-        padding: 15px;
-        border-radius: 12px;
-        background-color: #ffffff;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-        height: 100%;
-        transition: 0.3s;
+        padding: 10px;
+        border-radius: 8px;
+        background-color: #fdfdfd;
+        margin-bottom: 10px;
     }
-    .dukkan-kart:hover { border-color: #f39233; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
     
-    /* Arama çubuğu alanını daralt */
-    .stTextInput > div > div > input { padding: 8px; }
+    /* Logo alanındaki boşlukları azalt */
+    .stImage { text-align: center; margin-top: -30px; }
+    
+    /* Buton boyutlarını ayarla */
+    .stButton > button { height: 35px; font-size: 0.8rem !important; }
 </style>
 """, unsafe_allow_all_html=True)
 
-# 4. ÜST KISIM (LOGO)
-c1, c2, c3 = st.columns([1, 1, 1])
+# 4. ÜST KISIM (KÜÇÜK LOGO)
+c1, c2, c3 = st.columns([1.5, 1, 1.5])
 with c2:
     try:
-        st.image("logo.png", width=180) # Logo boyutunu biraz küçülttük
+        # width=120 yaparak logoyu bayağı ufaltıyoruz
+        st.image("logo.png", width=120) 
     except:
-        st.title("En Ucuzu Burada")
+        st.title("🛒 En Ucuzu Burada")
 
 # 5. FONKSİYONLAR
 def dukkan_ara(urun, lokasyon):
@@ -51,37 +52,34 @@ def telefon_bul(place_id):
     res = requests.get(url).json()
     return res.get('result', {}).get('formatted_phone_number', '')
 
-# 6. ARAMA ALANI (Daha kompakt)
-with st.container():
-    col_arama, col_yer = st.columns([2, 1])
-    with col_arama:
-        arama = st.text_input("Ürün adı", placeholder="Matkap, Vida...", label_visibility="collapsed")
-    with col_yer:
-        yer = st.text_input("Konum", value="İstoç", label_visibility="collapsed")
-    
-    ara_btn = st.button("Dükkanları Listele", use_container_width=True)
+# 6. ARAMA ALANI
+st.write("") # Küçük boşluk
+col_arama, col_yer = st.columns([2, 1])
+with col_arama:
+    arama = st.text_input("Ürün", placeholder="Ne arıyorsun?", label_visibility="collapsed")
+with col_yer:
+    yer = st.text_input("Konum", value="İstoç", label_visibility="collapsed")
 
-# 7. SONUÇLARI GÖSTER (Grid / Yan yana yapı)
+ara_btn = st.button("Dükkanları Listele", use_container_width=True)
+
+# 7. SONUÇLAR (GRID)
 if ara_btn:
     if arama:
-        with st.spinner('Sonuçlar yükleniyor...'):
+        with st.spinner('Aranıyor...'):
             sonuclar = dukkan_ara(arama, yer)
             if sonuclar:
-                st.success(f"{len(sonuclar)} dükkan listelendi.")
-                
-                # Her satırda 2 veya 3 dükkan göstermek için döngü
+                # Satırda 2 dükkan yan yana gelecek şekilde
                 for i in range(0, len(sonuclar), 2):
-                    cols = st.columns(2) # Satırda 2 dükkan yan yana
+                    cols = st.columns(2)
                     for j in range(2):
                         if i + j < len(sonuclar):
                             dukkan = sonuclar[i+j]
                             isim = dukkan.get('name')
-                            adres = dukkan.get('formatted_address')[:60] + "..." # Adresi kısalttık
+                            adres = dukkan.get('formatted_address')[:50] + "..."
                             puan = dukkan.get('rating', 'Yok')
                             place_id = dukkan.get('place_id')
                             
                             with cols[j]:
-                                # Kart yapısını başlat
                                 st.markdown(f"""
                                 <div class="dukkan-kart">
                                     <h3>🏢 {isim}</h3>
@@ -90,7 +88,6 @@ if ara_btn:
                                 </div>
                                 """, unsafe_allow_all_html=True)
                                 
-                                # Butonlar (Streamlit'in kendi butonlarını kartın altına koyuyoruz)
                                 b1, b2 = st.columns(2)
                                 with b1:
                                     st.link_button("📍 Konum", f"https://www.google.com/maps/search/?api=1&query={isim.replace(' ', '+')}&query_place_id={place_id}", use_container_width=True)
