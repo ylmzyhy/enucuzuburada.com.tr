@@ -92,4 +92,14 @@ if ara_btn:
                                 
                                 # Butonlar (Streamlit'in kendi butonlarını kartın altına koyuyoruz)
                                 b1, b2 = st.columns(2)
-                                with b1
+                                with b1:
+                                    st.link_button("📍 Konum", f"https://www.google.com/maps/search/?api=1&query={isim.replace(' ', '+')}&query_place_id={place_id}", use_container_width=True)
+                                with b2:
+                                    tel = telefon_bul(place_id)
+                                    if tel:
+                                        wa_link = f"https://wa.me/{tel.replace(' ', '').replace('+', '')}"
+                                        st.link_button("💬 WhatsApp", wa_link, use_container_width=True)
+                                    else:
+                                        st.button("📞 No Yok", disabled=True, use_container_width=True)
+            else:
+                st.warning("Sonuç bulunamadı.")
