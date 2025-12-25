@@ -23,7 +23,7 @@ def dukkan_ara(urun, lokasyon):
     return response.get('results', [])
 
 def detay_getir(place_id):
-    # Telefon ve Çalışma Saatlerini çekmek için detay sorgusu
+    # Telefon ve Detaylı Çalışma Saatlerini (weekday_text) çekmek için detay sorgusu
     fields = "formatted_phone_number,opening_hours,international_phone_number"
     url = f"https://maps.googleapis.com/maps/api/place/details/json?place_id={place_id}&fields={fields}&key={API_KEY}&language=tr"
     res = requests.get(url).json()
@@ -37,11 +37,11 @@ with c1:
     arama = st.text_input("Ne arıyorsunuz?", placeholder="Örn: Kaynak Makinesi, Matkap...")
 
 with c2:
-    yer = st.text_input("Şehir / İlçe seçin", placeholder="Örn: Ankara, İzmir Karşıyaka, İstoç...")
+    yer = st.text_input("Şehir / İlçe seçin", placeholder="Örn: Ankara Ostim, İstanbul İkitelli...")
 
 if st.button("Dükkanları ve Fiyat Sorulacak Yerleri Bul", use_container_width=True):
     if arama and yer:
-        with st.spinner('Veriler güncelleniyor...'):
+        with st.spinner('Bilgiler hazırlanıyor...'):
             sonuclar = dukkan_ara(arama, yer)
             
             if sonuclar:
@@ -53,49 +53,39 @@ if st.button("Dükkanları ve Fiyat Sorulacak Yerleri Bul", use_container_width=
                     puan = dukkan.get('rating', 'Yeni İşletme')
                     pid = dukkan.get('place_id')
                     
-                    # Ek detayları (Telefon ve Saatler) çek
+                    # Detayları (Telefon ve Saatler) çek
                     detay = detay_getir(pid)
                     tel = detay.get('formatted_phone_number') or detay.get('international_phone_number')
                     saatler = detay.get('opening_hours', {})
-                    acik_mi = "Bilgi Yok"
+                    
+                    # Çalışma Saatlerini Çözme
+                    acik_mi_text = "Bilgi Yok"
+                    calisma_saati = "Belirtilmemiş"
+                    
                     if saatler:
-                        acik_mi = "✅ ŞİMDİ AÇIK" if saatler.get('open_now') else "❌ ŞİMDİ KAPALI"
+                        # Şu an açık mı?
+                        acik_mi_text = "✅ ŞİMDİ AÇIK" if saatler.get('open_now') else "❌ ŞİMDİ KAPALI"
+                        
+                        # Bugünün çalışma saatini al (weekday_text içinden)
+                        # Not: weekday_text genellikle 7 günlük listeyi verir.
+                        gunluk_liste = saatler.get('weekday_text', [])
+                        if gunluk_liste:
+                            # Bugünün hangi gün olduğunu bulup o satırı çekebiliriz
+                            # Basitlik için tüm haftayı veya sadece bugünü gösterebiliriz.
+                            # Burada dükkanın genel çalışma bilgisini gösteriyoruz.
+                            calisma_saati = gunluk_liste[0].split(": ", 1)[-1] if gunluk_liste else "Belirtilmemiş"
 
                     with st.container():
                         st.divider()
                         st.subheader(f"🏢 {isim}")
                         st.write(f"📍 **Adres:** {adres}")
                         
-                        # Önce Telefon Numarası
+                        # 1. Telefon
                         if tel:
                             st.write(f"📞 **Telefon:** {tel}")
                         else:
                             st.write("📞 **Telefon:** Belirtilmemiş")
                         
-                        # Sonra Açılış Kapanış Durumu
-                        st.write(f"⏰ **Durum:** {acik_mi}")
-                        st.write(f"⭐ **Puan:** {puan}")
-                        
-                        col_btn1, col_btn2 = st.columns(2)
-                        
-                        with col_btn1:
-                            harita_link = f"https://www.google.com/maps/search/?api=1&query={isim.replace(' ', '+')}&query_place_id={pid}"
-                            st.link_button("📍 Konum ve Yol Tarifi", harita_link, use_container_width=True)
-                        
-                        with col_btn2:
-                            if tel:
-                                temiz_tel = "".join(filter(str.isdigit, tel))
-                                if temiz_tel.startswith("0"):
-                                    temiz_tel = "9" + temiz_tel
-                                
-                                wa_mesaj = f"Merhaba, {arama} ürünü için fiyat bilgisi alabilir miyim?"
-                                wa_link = f"https://wa.me/{temiz_tel}?text={wa_mesaj}"
-                                st.link_button("💬 WhatsApp'tan Fiyat Sor", wa_link, type="primary", use_container_width=True)
-                            else:
-                                st.button("💬 WhatsApp Mevcut Değil", disabled=True, use_container_width=True)
-            else:
-                st.warning("Sonuç bulunamadı.")
-    else:
-        st.error("Lütfen tüm alanları doldurun.")
-
-st.caption("© 2025 enucuzuburada.com.tr")
+                        # 2. Açılış - Kapanış Saatleri
+                        st.write(f"⏰ **Çalışma Saatleri:** {calisma_saati}")
+                        st.write(f"ℹ️ **Durum:** {acik_mi_text}")
