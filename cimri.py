@@ -23,8 +23,8 @@ def dukkan_ara(urun, lokasyon):
     return response.get('results', [])
 
 def detay_getir(place_id):
-    # Telefon ve Detaylı Çalışma Saatlerini (weekday_text) çekmek için detay sorgusu
-    fields = "formatted_phone_number,opening_hours,international_phone_number"
+    # Fotoğraf, Telefon ve Saatler için detay sorgusu
+    fields = "formatted_phone_number,opening_hours,international_phone_number,photos"
     url = f"https://maps.googleapis.com/maps/api/place/details/json?place_id={place_id}&fields={fields}&key={API_KEY}&language=tr"
     res = requests.get(url).json()
     return res.get('result', {})
@@ -37,11 +37,11 @@ with c1:
     arama = st.text_input("Ne arıyorsunuz?", placeholder="Örn: Kaynak Makinesi, Matkap...")
 
 with c2:
-    yer = st.text_input("Şehir / İlçe seçin", placeholder="Örn: Ankara Ostim, İstanbul İkitelli...")
+    yer = st.text_input("Şehir / İlçe seçin", placeholder="Örn: Ankara Ostim, İkitelli...")
 
 if st.button("Dükkanları ve Fiyat Sorulacak Yerleri Bul", use_container_width=True):
     if arama and yer:
-        with st.spinner('Bilgiler hazırlanıyor...'):
+        with st.spinner('Detaylı bilgiler çekiliyor...'):
             sonuclar = dukkan_ara(arama, yer)
             
             if sonuclar:
@@ -53,39 +53,64 @@ if st.button("Dükkanları ve Fiyat Sorulacak Yerleri Bul", use_container_width=
                     puan = dukkan.get('rating', 'Yeni İşletme')
                     pid = dukkan.get('place_id')
                     
-                    # Detayları (Telefon ve Saatler) çek
+                    # Detayları (Telefon, Saat, Foto) çek
                     detay = detay_getir(pid)
                     tel = detay.get('formatted_phone_number') or detay.get('international_phone_number')
                     saatler = detay.get('opening_hours', {})
+                    fotolar = detay.get('photos', [])
                     
-                    # Çalışma Saatlerini Çözme
                     acik_mi_text = "Bilgi Yok"
                     calisma_saati = "Belirtilmemiş"
                     
                     if saatler:
-                        # Şu an açık mı?
                         acik_mi_text = "✅ ŞİMDİ AÇIK" if saatler.get('open_now') else "❌ ŞİMDİ KAPALI"
-                        
-                        # Bugünün çalışma saatini al (weekday_text içinden)
-                        # Not: weekday_text genellikle 7 günlük listeyi verir.
                         gunluk_liste = saatler.get('weekday_text', [])
                         if gunluk_liste:
-                            # Bugünün hangi gün olduğunu bulup o satırı çekebiliriz
-                            # Basitlik için tüm haftayı veya sadece bugünü gösterebiliriz.
-                            # Burada dükkanın genel çalışma bilgisini gösteriyoruz.
-                            calisma_saati = gunluk_liste[0].split(": ", 1)[-1] if gunluk_liste else "Belirtilmemiş"
+                            calisma_saati = gunluk_liste[0].split(": ", 1)[-1]
 
                     with st.container():
                         st.divider()
-                        st.subheader(f"🏢 {isim}")
-                        st.write(f"📍 **Adres:** {adres}")
+                        # Görsel ve Metni yan yana getirmek için kolonlar
+                        col_img, col_txt = st.columns([1, 3])
                         
-                        # 1. Telefon
-                        if tel:
-                            st.write(f"📞 **Telefon:** {tel}")
-                        else:
-                            st.write("📞 **Telefon:** Belirtilmemiş")
+                        with col_img:
+                            if fotolar:
+                                foto_ref = fotolar[0].get('photo_reference')
+                                foto_url = f"https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference={foto_ref}&key={API_KEY}"
+                                st.image(foto_url, use_container_width=True)
+                            else:
+                                st.write("🖼️ Fotoğraf Yok")
+
+                        with col_txt:
+                            st.subheader(f"🏢 {isim}")
+                            st.write(f"📍 **Adres:** {adres}")
+                            if tel:
+                                st.write(f"📞 **Telefon:** {tel}")
+                            st.write(f"⏰ **Çalışma Saatleri:** {calisma_saati} ({acik_mi_text})")
+                            st.write(f"⭐ **Puan:** {puan}")
                         
-                        # 2. Açılış - Kapanış Saatleri
-                        st.write(f"⏰ **Çalışma Saatleri:** {calisma_saati}")
-                        st.write(f"ℹ️ **Durum:** {acik_mi_text}")
+                        # Butonlar
+                        b1, b2 = st.columns(2)
+                        with b1:
+                            harita_link = f"https://www.google.com/maps/search/?api=1&query={isim.replace(' ', '+')}&query_place_id={pid}"
+                            st.link_button("📍 Konum / Yol Tarifi", harita_link, use_container_width=True)
+                        
+                        with b2:
+                            if tel:
+                                temiz_tel = "".join(filter(str.isdigit, tel))
+                                if temiz_tel.startswith("0"):
+                                    temiz_tel = "9" + temiz_tel
+                                elif not temiz_tel.startswith("90"):
+                                    temiz_tel = "90" + temiz_tel # Türkiye kodu eklemesi
+                                
+                                wa_mesaj = f"Merhaba, {arama} ürünü için fiyat bilgisi alabilir miyim?"
+                                wa_link = f"https://wa.me/{temiz_tel}?text={wa_mesaj}"
+                                st.link_button("💬 WhatsApp'tan Fiyat Sor", wa_link, type="primary", use_container_width=True)
+                            else:
+                                st.button("💬 No Mevcut Değil", disabled=True, use_container_width=True)
+            else:
+                st.warning("Sonuç bulunamadı.")
+    else:
+        st.error("Lütfen tüm alanları doldurun.")
+
+st.caption("© 2025 enucuzuburada.com.tr")
