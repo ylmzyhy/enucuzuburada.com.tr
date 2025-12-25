@@ -1,4 +1,28 @@
 import streamlit as st
+
+# 1. Sayfa Ayarları (Sekme ismi ve ikonu)
+st.set_page_config(page_title="En Ucuzu Burada", page_icon="🛒", layout="wide")
+
+# 2. Logo Ekleme (Dosya adın neyse onu yazıyoruz, .png olarak güncelledim)
+try:
+    st.image("logo.png", width=250)
+except:
+    st.warning("Logo dosyası henüz GitHub'a yüklenmemiş görünüyor.")
+
+# 3. Renk ve Buton Stilleri (Logonla uyumlu olması için)
+st.markdown("""
+    <style>
+    .stButton>button {
+        background-color: #f39233; /* Logonun Turuncusu */
+        color: white;
+        border-radius: 5px;
+        font-weight: bold;
+    }
+    h1 {
+        color: #38b2ac; /* Logonun Turkuazı */
+    }
+    </style>
+    """, unsafe_allow_all_html=True)
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
@@ -115,3 +139,4 @@ if start_button:
                 st.download_button("Sonuçları Excel Olarak İndir", csv, "saticilar_listesi.csv")
             else:
                 st.warning("Sonuç bulunamadı.")
+
