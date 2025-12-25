@@ -1,26 +1,33 @@
 import streamlit as st
 import requests
 
-# 1. TEMEL SAYFA AYARLARI
+# 1. SAYFA AYARLARI
 st.set_page_config(page_title="En Ucuzu Burada", layout="wide")
 
-# 2. GOOGLE API ANAHTARIN (Resimden aldım)
+# 2. GOOGLE API ANAHTARIN (Resminde görünen anahtar)
 API_KEY = "AIzaSyDF9hKdF-D7atJJDqV-h56wlB7vgt9eqJE"
 
-# 3. LOGO (Varsa gösterir, yoksa isim yazar)
+# 3. LOGO
 try:
     st.image("logo.png", width=250)
 except:
     st.title("🛒 En Ucuzu Burada")
 
-# 4. GOOGLE MAPS ARAMA FONKSİYONU
+# 4. GOOGLE MAPS ARAMA FONKSİYONU (Hata tespiti için güncellendi)
 def dukkan_getir(sorgu):
-    # İstoç bölgesindeki dükkanları filtreleyerek arar
-    url = f"https://maps.googleapis.com/maps/api/place/textsearch/json?query={sorgu}+istoç&key={API_KEY}&language=tr"
+    # İstoç kelimesini sorguya ekliyoruz
+    url = f"https://maps.googleapis.com/maps/api/place/textsearch/json?query={sorgu}+istoç+istanbul&key={API_KEY}&language=tr"
     response = requests.get(url).json()
+    
+    # Ekranda hata analizi yapmamızı sağlar
+    if response.get("status") != "OK" and response.get("status") != "ZERO_RESULTS":
+        st.error(f"Google API Mesajı: {response.get('status')}")
+        if response.get("error_message"):
+            st.info(f"Detay: {response.get('error_message')}")
+            
     return response.get('results', [])
 
-# 5. ARAYÜZ TASARIMI
+# 5. ARAYÜZ
 st.write("---")
 arama_terimi = st.text_input("Ne arıyorsunuz?", placeholder="Örn: Dübel, Bant, Koli...")
 
@@ -30,32 +37,16 @@ if st.button("Dükkanları Bul"):
             sonuclar = dukkan_getir(arama_terimi)
             
             if sonuclar:
-                st.success(f"'{arama_terimi}' için {len(sonuclar)} dükkan listeleniyor:")
-                
+                st.success(f"'{arama_terimi}' için {len(sonuclar)} dükkan bulundu.")
                 for dukkan in sonuclar:
-                    isim = dukkan.get('name')
-                    adres = dukkan.get('formatted_address')
-                    puan = dukkan.get('rating', 'Puan Yok')
-                    
-                    # Dükkan Bilgileri
-                    st.subheader(f"🏢 {isim}")
-                    st.write(f"📍 **Adres:** {adres}")
-                    st.write(f"⭐ **Puan:** {puan}")
-                    
-                    # Linkler
-                    c1, c2 = st.columns(2)
-                    with c1:
-                        harita_link = f"https://www.google.com/maps/search/?api=1&query={isim.replace(' ', '+')}"
-                        st.markdown(f"[📍 Haritada Gör]({harita_link})")
-                    with c2:
-                        wa_mesaj = f"Merhaba, {arama_terimi} fiyatını öğrenebilir miyim?"
-                        wa_link = f"https://wa.me/?text={wa_mesaj}"
-                        st.markdown(f"[💬 WhatsApp'tan Sor]({wa_link})")
-                    st.write("---")
+                    with st.container():
+                        st.subheader(f"🏢 {dukkan.get('name')}")
+                        st.write(f"📍 **Adres:** {dukkan.get('formatted_address')}")
+                        st.write(f"⭐ **Puan:** {dukkan.get('rating', 'Yok')}")
+                        st.divider()
             else:
-                st.warning("Aradığınız kriterlere uygun bir dükkan bulunamadı.")
+                st.warning("Bu ürün için şu an bir dükkan listelenemedi. Google anahtarınızın aktifleşmesini bekliyor olabiliriz.")
     else:
         st.error("Lütfen bir ürün adı yazın.")
 
-# 6. ALT BİLGİ
 st.caption("© 2025 enucuzuburada.com.tr")
