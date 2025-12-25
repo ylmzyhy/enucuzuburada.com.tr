@@ -16,58 +16,61 @@ with col2:
         st.title("🛒 En Ucuzu Burada")
 
 # 4. FONKSİYONLAR
-def dukkan_ara(kelime):
-    # İstoç odaklı arama yapar
-    url = f"https://maps.googleapis.com/maps/api/place/textsearch/json?query={kelime}+istoç+istanbul&key={API_KEY}&language=tr"
+def dukkan_ara(urun, lokasyon):
+    # Kullanıcının girdiği ürün ve lokasyonu birleştiriyoruz
+    sorgu = f"{urun} {lokasyon}"
+    url = f"https://maps.googleapis.com/maps/api/place/textsearch/json?query={sorgu}&key={API_KEY}&language=tr"
     response = requests.get(url).json()
     return response.get('results', [])
 
 def telefon_bul(place_id):
-    # Dükkanın telefonunu almak için detay sorgusu yapar
     url = f"https://maps.googleapis.com/maps/api/place/details/json?place_id={place_id}&fields=formatted_phone_number&key={API_KEY}&language=tr"
     res = requests.get(url).json()
     return res.get('result', {}).get('formatted_phone_number', '')
 
-# 5. ARAYÜZ
+# 5. ARAYÜZ (İKİLİ ARAMA KUTUSU)
 st.write("---")
-arama = st.text_input("Ne arıyorsunuz?", placeholder="Örn: Dübel, Bant, Vida...")
+col_arama, col_yer = st.columns([2, 1]) # Ürün kutusu daha geniş, yer kutusu daha dar
 
-if st.button("Dükkanları Bul"):
+with col_arama:
+    arama = st.text_input("Ne arıyorsunuz?", placeholder="Örn: Dübel, Bant, Matkap...")
+
+with col_yer:
+    yer = st.text_input("Nerede?", value="İstoç", placeholder="İl veya ilçe yazın...")
+
+if st.button("Dükkanları Bul", use_container_width=True):
     if arama:
-        with st.spinner('Gerçek zamanlı veriler taranıyor...'):
-            sonuclar = dukkan_ara(arama)
+        with st.spinner(f'{yer} bölgesinde {arama} aranıyor...'):
+            sonuclar = dukkan_ara(arama, yer)
             if sonuclar:
-                st.success(f"'{arama}' için {len(sonuclar)} dükkan bulundu.")
+                st.success(f"'{yer}' bölgesinde {len(sonuclar)} dükkan bulundu.")
                 for dukkan in sonuclar:
                     isim = dukkan.get('name')
                     adres = dukkan.get('formatted_address')
                     puan = dukkan.get('rating', 'Yok')
                     place_id = dukkan.get('place_id')
                     
-                    # Kart Tasarımı
                     with st.container():
                         st.subheader(f"🏢 {isim}")
                         st.write(f"📍 **Adres:** {adres}")
                         st.write(f"⭐ **Puan:** {puan}")
                         
-                        # Butonlar için sütunlar
                         c1, c2 = st.columns(2)
                         with c1:
                             harita_url = f"https://www.google.com/maps/search/?api=1&query={isim.replace(' ', '+')}&query_place_id={place_id}"
                             st.link_button("📍 Haritada Gör", harita_url, use_container_width=True)
                         with c2:
-                            # Telefonu bulup WhatsApp'a bağla
                             tel = telefon_bul(place_id)
                             wa_msg = f"Merhaba, {arama} fiyatını öğrenmek istiyorum."
                             if tel:
                                 wa_link = f"https://wa.me/{tel.replace(' ', '').replace('+', '')}?text={wa_msg}"
                                 st.link_button("💬 WhatsApp'tan Sor", wa_link, type="primary", use_container_width=True)
                             else:
-                                st.write("📞 Telefon bulunamadı")
+                                st.info("📞 Telefon Bulunamadı")
                         st.divider()
             else:
-                st.warning("Üzgünüz, dükkan bulunamadı.")
+                st.warning(f"'{yer}' bölgesinde bu ürün için dükkan bulunamadı.")
     else:
         st.error("Lütfen bir ürün adı yazın.")
 
-st.caption("© 2025 enucuzuburada.com.tr | İstoç Rehberi")
+st.caption("© 2025 enucuzuburada.com.tr")
