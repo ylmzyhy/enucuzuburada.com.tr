@@ -7,36 +7,37 @@ st.set_page_config(page_title="En Ucuzu Burada", page_icon="🛒", layout="wide"
 # 2. API ANAHTARIN
 API_KEY = "AIzaSyDF9hKdF-D7atJJDqV-h56wlB7vgt9eqJE"
 
-# 3. ÖZEL TASARIM (CSS)
+# 3. ÖZEL TASARIM (Görseli Ufaltan ve Sıkılaştıran CSS)
 st.markdown("""
 <style>
-    /* Başlıkları ve metinleri küçült */
-    h3 { font-size: 1rem !important; font-weight: bold; margin-bottom: 2px; }
-    p { font-size: 0.85rem !important; margin-bottom: 2px; line-height: 1.2; }
+    /* Logo ve üst boşluğu daralt */
+    .stImage { text-align: center; margin-top: -40px; margin-bottom: -20px; }
     
-    /* Dükkan kutularını daha kompakt yap */
+    /* Başlık ve yazıları kibarlaştır */
+    h3 { font-size: 0.95rem !important; font-weight: bold; margin-bottom: 2px; color: #1E1E1E; }
+    p { font-size: 0.8rem !important; margin-bottom: 2px; color: #555; }
+    
+    /* Dükkan kutularını (Card) küçült */
     .dukkan-kart {
-        border: 1px solid #eee;
-        padding: 10px;
-        border-radius: 8px;
-        background-color: #fdfdfd;
+        border: 1px solid #f0f0f0;
+        padding: 8px;
+        border-radius: 10px;
+        background-color: #ffffff;
         margin-bottom: 10px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
     }
     
-    /* Logo alanındaki boşlukları azalt */
-    .stImage { text-align: center; margin-top: -30px; }
-    
-    /* Buton boyutlarını ayarla */
-    .stButton > button { height: 35px; font-size: 0.8rem !important; }
+    /* Butonları daha ince yap */
+    .stButton > button { height: 32px; font-size: 0.75rem !important; border-radius: 6px; }
 </style>
 """, unsafe_allow_all_html=True)
 
-# 4. ÜST KISIM (KÜÇÜK LOGO)
-c1, c2, c3 = st.columns([1.5, 1, 1.5])
-with c2:
+# 4. ÜST KISIM (KİBAR LOGO)
+col1, col2, col3 = st.columns([2, 1, 2])
+with col2:
     try:
-        # width=120 yaparak logoyu bayağı ufaltıyoruz
-        st.image("logo.png", width=120) 
+        # width=100 yaparak logoyu tam istediğin gibi ufaltıyoruz
+        st.image("logo.png", width=100) 
     except:
         st.title("🛒 En Ucuzu Burada")
 
@@ -53,29 +54,27 @@ def telefon_bul(place_id):
     return res.get('result', {}).get('formatted_phone_number', '')
 
 # 6. ARAMA ALANI
-st.write("") # Küçük boşluk
-col_arama, col_yer = st.columns([2, 1])
-with col_arama:
+st.write("") 
+c_ara, c_yer = st.columns([2, 1])
+with c_ara:
     arama = st.text_input("Ürün", placeholder="Ne arıyorsun?", label_visibility="collapsed")
-with col_yer:
+with c_yer:
     yer = st.text_input("Konum", value="İstoç", label_visibility="collapsed")
 
-ara_btn = st.button("Dükkanları Listele", use_container_width=True)
-
-# 7. SONUÇLAR (GRID)
-if ara_btn:
+if st.button("Dükkanları Listele", use_container_width=True):
     if arama:
-        with st.spinner('Aranıyor...'):
+        with st.spinner('Sonuçlar geliyor...'):
             sonuclar = dukkan_ara(arama, yer)
             if sonuclar:
-                # Satırda 2 dükkan yan yana gelecek şekilde
+                st.success(f"{len(sonuclar)} dükkan bulundu.")
+                # Izgara (Grid) görünümü: Yan yana 2 dükkan
                 for i in range(0, len(sonuclar), 2):
                     cols = st.columns(2)
                     for j in range(2):
                         if i + j < len(sonuclar):
                             dukkan = sonuclar[i+j]
                             isim = dukkan.get('name')
-                            adres = dukkan.get('formatted_address')[:50] + "..."
+                            adres = dukkan.get('formatted_address', '')[:45] + "..."
                             puan = dukkan.get('rating', 'Yok')
                             place_id = dukkan.get('place_id')
                             
@@ -90,11 +89,11 @@ if ara_btn:
                                 
                                 b1, b2 = st.columns(2)
                                 with b1:
-                                    st.link_button("📍 Konum", f"https://www.google.com/maps/search/?api=1&query={isim.replace(' ', '+')}&query_place_id={place_id}", use_container_width=True)
+                                    st.link_button("📍 Konum", f"https://www.google.com/maps/place/?q=place_id:{place_id}", use_container_width=True)
                                 with b2:
                                     tel = telefon_bul(place_id)
                                     if tel:
-                                        wa_link = f"https://wa.me/{tel.replace(' ', '').replace('+', '')}"
+                                        wa_link = f"https://wa.me/{tel.replace(' ', '').replace('+', '')}?text=Merhaba,{arama} fiyatı alabilir miyim?"
                                         st.link_button("💬 WhatsApp", wa_link, use_container_width=True)
                                     else:
                                         st.button("📞 No Yok", disabled=True, use_container_width=True)
