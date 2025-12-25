@@ -7,11 +7,12 @@ st.set_page_config(page_title="En Ucuzu Burada", page_icon="🛒", layout="wide"
 # 2. API ANAHTARI
 API_KEY = "AIzaSyDF9hKdF-D7atJJDqV-h56wlB7vgt9eqJE"
 
-# 3. LOGO
-col1, col2, col3 = st.columns([1, 1, 1])
-with col2:
+# 3. LOGO (SOLA YASLI VE BÜYÜK)
+col_logo, col_bosluk = st.columns([1, 2]) 
+with col_logo:
     try:
-        st.image("logo.png", width=220)
+        # Logo genişliği 400px yapılarak büyütüldü
+        st.image("logo.png", width=400) 
     except:
         st.title("🛒 En Ucuzu Burada")
 
@@ -23,23 +24,25 @@ def dukkan_ara(urun, lokasyon):
     return response.get('results', [])
 
 def detay_getir(place_id):
-    # Fotoğraf, Telefon ve Saatler için detay sorgusu
     fields = "formatted_phone_number,opening_hours,international_phone_number,photos"
     url = f"https://maps.googleapis.com/maps/api/place/details/json?place_id={place_id}&fields={fields}&key={API_KEY}&language=tr"
     res = requests.get(url).json()
     return res.get('result', {})
 
-# 5. ARAMA ARAYÜZÜ
-st.write("---")
-c1, c2 = st.columns([2, 1])
+# 5. ARAMA ARAYÜZÜ (BOŞLUK AZALTILDI)
+# Logo ile arama arasındaki çizgi kaldırıldı, boşluk daraltıldı
+c1, c2 = st.columns([2, 1], gap="small")
 
 with c1:
-    arama = st.text_input("Ne arıyorsunuz?", placeholder="Örn: Kaynak Makinesi, Matkap...")
+    arama = st.text_input("Neyi en ucuza almak istersin?", placeholder="Örn: Kaynak Makinesi, Matkap...", key="main_search")
 
 with c2:
-    yer = st.text_input("Şehir / İlçe seçin", placeholder="Örn: Ankara Ostim, İkitelli...")
+    yer = st.text_input("Şehir / İlçe seçin", placeholder="Örn: Ankara Ostim, İkitelli...", key="main_loc")
 
-if st.button("Dükkanları ve Fiyat Sorulacak Yerleri Bul", use_container_width=True):
+# Arama Butonu
+search_clicked = st.button("Dükkanları ve Fiyat Sorulacak Yerleri Bul", use_container_width=True, type="primary")
+
+if search_clicked:
     if arama and yer:
         with st.spinner('Detaylı bilgiler çekiliyor...'):
             sonuclar = dukkan_ara(arama, yer)
@@ -47,13 +50,12 @@ if st.button("Dükkanları ve Fiyat Sorulacak Yerleri Bul", use_container_width=
             if sonuclar:
                 st.success(f"'{yer}' bölgesinde {len(sonuclar)} yer bulundu.")
                 
-                for dukkan in sonuclar:
+                for idx, dukkan in enumerate(sonuclar):
                     isim = dukkan.get('name')
                     adres = dukkan.get('formatted_address')
                     puan = dukkan.get('rating', 'Yeni İşletme')
                     pid = dukkan.get('place_id')
                     
-                    # Detayları (Telefon, Saat, Foto) çek
                     detay = detay_getir(pid)
                     tel = detay.get('formatted_phone_number') or detay.get('international_phone_number')
                     saatler = detay.get('opening_hours', {})
@@ -68,8 +70,8 @@ if st.button("Dükkanları ve Fiyat Sorulacak Yerleri Bul", use_container_width=
                         if gunluk_liste:
                             calisma_saati = gunluk_liste[0].split(": ", 1)[-1]
 
-                    with st.container():
-                        st.divider()
+                    # DÜKKAN KARTI (BORDER=TRUE İLE KURUMSAL GÖRÜNÜM)
+                    with st.container(border=True):
                         # Görsel ve Metni yan yana getirmek için kolonlar
                         col_img, col_txt = st.columns([1, 3])
                         
@@ -89,11 +91,11 @@ if st.button("Dükkanları ve Fiyat Sorulacak Yerleri Bul", use_container_width=
                             st.write(f"⏰ **Çalışma Saatleri:** {calisma_saati} ({acik_mi_text})")
                             st.write(f"⭐ **Puan:** {puan}")
                         
-                        # Butonlar
+                        # Butonlar (Hata almamak için benzersiz KEY eklendi)
                         b1, b2 = st.columns(2)
                         with b1:
                             harita_link = f"https://www.google.com/maps/search/?api=1&query={isim.replace(' ', '+')}&query_place_id={pid}"
-                            st.link_button("📍 Konum / Yol Tarifi", harita_link, use_container_width=True)
+                            st.link_button("📍 Konum / Yol Tarifi", harita_link, use_container_width=True, key=f"map_{idx}_{pid}")
                         
                         with b2:
                             if tel:
@@ -101,13 +103,13 @@ if st.button("Dükkanları ve Fiyat Sorulacak Yerleri Bul", use_container_width=
                                 if temiz_tel.startswith("0"):
                                     temiz_tel = "9" + temiz_tel
                                 elif not temiz_tel.startswith("90"):
-                                    temiz_tel = "90" + temiz_tel # Türkiye kodu eklemesi
+                                    temiz_tel = "90" + temiz_tel 
                                 
                                 wa_mesaj = f"Merhaba, {arama} ürünü için fiyat bilgisi alabilir miyim?"
                                 wa_link = f"https://wa.me/{temiz_tel}?text={wa_mesaj}"
-                                st.link_button("💬 WhatsApp'tan Fiyat Sor", wa_link, type="primary", use_container_width=True)
+                                st.link_button("💬 WhatsApp'tan Fiyat Sor", wa_link, type="primary", use_container_width=True, key=f"wa_{idx}_{pid}")
                             else:
-                                st.button("💬 No Mevcut Değil", disabled=True, use_container_width=True)
+                                st.button("💬 No Mevcut Değil", disabled=True, use_container_width=True, key=f"none_{idx}_{pid}")
             else:
                 st.warning("Sonuç bulunamadı.")
     else:
