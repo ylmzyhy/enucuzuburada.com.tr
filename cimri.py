@@ -7,13 +7,9 @@ st.set_page_config(page_title="En Ucuzu Burada", page_icon="🛒", layout="wide"
 # 2. API ANAHTARI
 API_KEY = "AIzaSyDF9hKdF-D7atJJDqV-h56wlB7vgt9eqJE"
 
-# 3. LOGO
-col_l1, col_l2, col_l3 = st.columns([1, 1, 1])
-with col_l2:
-    try:
-        st.image("logo.png", width=220)
-    except:
-        st.title("🛒 En Ucuzu Burada")
+# 3. LOGO VE BAŞLIK
+st.title("🛒 En Ucuzu Burada")
+st.write("Dükkanları bulun ve hızlıca fiyat sorun.")
 
 # 4. FONKSİYONLAR
 def dukkan_ara(urun, lokasyon):
@@ -26,95 +22,71 @@ def dukkan_ara(urun, lokasyon):
         return []
 
 def detay_getir(pid):
-    url = f"https://maps.googleapis.com/maps/api/place/details/json?place_id={pid}&fields=formatted_phone_number,opening_hours,international_phone_number,photos&key={API_KEY}&language=tr"
+    url = f"https://maps.googleapis.com/maps/api/place/details/json?place_id={pid}&fields=formatted_phone_number,photos,opening_hours&key={API_KEY}&language=tr"
     try:
         r = requests.get(url).json()
         return r.get('result', {})
     except:
         return {}
 
-# 5. KATEGORİLER
-st.write("---")
-st.markdown("### 🏬 Popüler Kategoriler")
-kat_gruplari = {
-    "📱 Elektronik": ["Cep Telefonu", "Bilgisayar", "Beyaz Eşya"],
-    "🛠️ Yapı & Sanayi": ["Hırdavat", "Elektrik", "Ambalaj"],
-    "🏠 Ev & Yaşam": ["Mobilya", "Dekorasyon", "Mutfak"]
-}
+# 5. ARAMA BÖLÜMÜ
+col_a, col_b = st.columns([2, 1])
+with col_a:
+    input_ara = st.text_input("Ürün veya Marka", placeholder="Örn: Cep Telefonu, Matkap...", key="q")
+with col_b:
+    input_yer = st.text_input("Konum", value="İstanbul", key="l")
 
-secilen_kat = ""
-for grup, liste in kat_gruplari.items():
-    with st.expander(grup):
-        cols = st.columns(len(liste))
-        for i, kat in enumerate(liste):
-            if cols[i].button(kat, key=f"k_btn_{kat}"):
-                secilen_kat = kat
-
-# 6. ARAMA ALANI
-st.write("")
-c1, c2 = st.columns([2, 1])
-with c1:
-    arama_input = st.text_input("Ürün veya Marka", value=secilen_kat, key="search_input")
-with c2:
-    yer = st.text_input("Şehir / İlçe", value="İstanbul", key="loc_input")
-
-# 7. ARAMA MANTIĞI
-if st.button("Dükkanları Listele", key="submit_button", use_container_width=True) or secilen_kat:
-    final_ara = arama_input if arama_input else secilen_kat
-    
-    if final_ara and yer:
-        with st.spinner('Sonuçlar yükleniyor...'):
-            sonuclar = dukkan_ara(final_ara, yer)
+if st.button("Dükkanları Listele", use_container_width=True, type="primary"):
+    if input_ara and input_yer:
+        with st.spinner('Sonuçlar taranıyor...'):
+            sonuclar = dukkan_ara(input_ara, input_yer)
             
             if sonuclar:
-                # Puan sıralaması (Yüksek puanlılar üstte)
-                sonuclar = sorted(sonuclar, key=lambda x: x.get('rating', 0), reverse=True)
-                
                 for idx, dukkan in enumerate(sonuclar):
                     pid = dukkan.get('place_id')
                     detay = detay_getir(pid)
                     
-                    isim = dukkan.get('name', 'İsimsiz Dükkan')
-                    tel = detay.get('formatted_phone_number') or detay.get('international_phone_number')
-                    saatler = detay.get('opening_hours', {})
-                    durum = "✅ AÇIK" if saatler.get('open_now') else "❌ KAPALI"
+                    isim = dukkan.get('name', 'İsimsiz İşletme')
+                    adres = dukkan.get('formatted_address', 'Adres yok')
+                    tel = detay.get('formatted_phone_number')
+                    fotolar = detay.get('photos', [])
                     
                     with st.container():
                         st.divider()
-                        col_img, col_txt = st.columns([1, 3])
+                        c1, c2 = st.columns([1, 3])
                         
-                        with col_img:
-                            fotos = detay.get('photos', [])
-                            if fotos:
-                                f_ref = fotos[0].get('photo_reference')
+                        with c1:
+                            if fotolar:
+                                f_ref = fotolar[0].get('photo_reference')
                                 f_url = f"https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference={f_ref}&key={API_KEY}"
                                 st.image(f_url, use_container_width=True)
                             else:
-                                st.write("🖼️ Fotoğraf Yok")
-
-                        with col_txt:
-                            st.subheader(isim)
-                            st.write(f"📍 {dukkan.get('formatted_address')}")
-                            if tel: st.write(f"📞 **Telefon:** {tel}")
-                            st.write(f"⭐ Puan: {dukkan.get('rating', 'Yeni')} | {durum}")
+                                st.write("🖼️ Görsel Yok")
                         
-                        # BUTONLAR (Hata önleyici benzersiz anahtarlar eklendi)
-                        b1, b2 = st.columns(2)
-                        with b1:
-                            m_link = f"https://www.google.com/maps/search/?api=1&query={isim}&query_place_id={pid}"
-                            st.link_button("📍 Haritada Göster", m_link, key=f"loc_{idx}_{pid}", use_container_width=True)
-                        with b2:
-                            if tel:
-                                clean_tel = "".join(filter(str.isdigit, tel))
-                                if clean_tel.startswith("0"): clean_tel = "9" + clean_tel
-                                elif not clean_tel.startswith("90"): clean_tel = "90" + clean_tel
-                                wa_link = f"https://wa.me/{clean_tel}?text=Merhaba, {final_ara} fiyatı alabilir miyim?"
-                                st.link_button("💬 WhatsApp", wa_link, key=f"wa_{idx}_{pid}", type="primary", use_container_width=True)
-                            else:
-                                st.button("📞 No Bulunamadı", key=f"none_{idx}_{pid}", disabled=True, use_container_width=True)
+                        with c2:
+                            st.subheader(isim)
+                            st.write(f"📍 {adres}")
+                            if tel: st.write(f"📞 **Telefon:** {tel}")
+                            
+                            # Butonlar için benzersiz key ataması
+                            b_col1, b_col2 = st.columns(2)
+                            with b_col1:
+                                m_url = f"https://www.google.com/maps/search/?api=1&query={isim}&query_place_id={pid}"
+                                st.link_button("📍 Haritada Gör", m_url, use_container_width=True, key=f"map_{idx}")
+                            
+                            with b_col2:
+                                if tel:
+                                    t_clean = "".join(filter(str.isdigit, tel))
+                                    if t_clean.startswith("0"): t_clean = "9" + t_clean
+                                    elif not t_clean.startswith("90"): t_clean = "90" + t_clean
+                                    
+                                    w_url = f"https://wa.me/{t_clean}?text=Merhaba, {input_ara} fiyatı alabilir miyim?"
+                                    st.link_button("💬 WhatsApp", w_url, use_container_width=True, key=f"wa_{idx}")
+                                else:
+                                    st.button("📞 Telefon Yok", disabled=True, use_container_width=True, key=f"no_{idx}")
             else:
                 st.warning("Sonuç bulunamadı.")
     else:
-        st.info("Lütfen arama yapın.")
+        st.error("Lütfen tüm alanları doldurun.")
 
 st.caption("© 2025 enucuzuburada.com.tr")
