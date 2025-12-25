@@ -7,11 +7,12 @@ st.set_page_config(page_title="En Ucuzu Burada", page_icon="🛒", layout="wide"
 # 2. API ANAHTARI
 API_KEY = "AIzaSyDF9hKdF-D7atJJDqV-h56wlB7vgt9eqJE"
 
-# 3. LOGO
-col1, col2, col3 = st.columns([1, 1, 1])
-with col2:
+# 3. LOGO (SOLA YASLI VE BÜYÜK)
+col_logo, col_bosluk = st.columns([1, 2]) 
+with col_logo:
     try:
-        st.image("logo.png", width=220)
+        # Genişliği 400 yaparak logoyu büyüttük
+        st.image("logo.png", width=400) 
     except:
         st.title("🛒 En Ucuzu Burada")
 
@@ -101,7 +102,7 @@ if st.button("Dükkanları ve Fiyat Sorulacak Yerleri Bul", use_container_width=
                                 if temiz_tel.startswith("0"):
                                     temiz_tel = "9" + temiz_tel
                                 elif not temiz_tel.startswith("90"):
-                                    temiz_tel = "90" + temiz_tel # Türkiye kodu eklemesi
+                                    temiz_tel = "90" + temiz_tel 
                                 
                                 wa_mesaj = f"Merhaba, {arama} ürünü için fiyat bilgisi alabilir miyim?"
                                 wa_link = f"https://wa.me/{temiz_tel}?text={wa_mesaj}"
