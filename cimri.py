@@ -1,71 +1,49 @@
 import streamlit as st
 import requests
 
-# 1. SAYFA AYARLARI
-st.set_page_config(page_title="En Ucuzu Burada", layout="wide")
+# 1. TEMEL AYARLAR
+st.set_page_config(page_title="En Ucuzu Burada", layout="centered")
 
-# 2. API ANAHTARIN
+# 2. LOGO (Ufaltılmış)
+try:
+    st.image("logo.png", width=120)
+except:
+    st.title("🛒 En Ucuzu Burada")
+
+# 3. API ANAHTARI
 API_KEY = "AIzaSyDF9hKdF-D7atJJDqV-h56wlB7vgt9eqJE"
 
-# 3. LOGO (Ufaltılmış ve Ortalanmış)
-col1, col2, col3 = st.columns([2, 1, 2])
-with col2:
-    try:
-        st.image("logo.png", width=120)
-    except:
-        st.title("En Ucuzu Burada")
-
 # 4. FONKSİYONLAR
-def dukkan_ara(urun, lokasyon):
-    sorgu = f"{urun} {lokasyon}"
+def dukkan_getir(urun, yer):
+    sorgu = f"{urun} {yer}"
     url = f"https://maps.googleapis.com/maps/api/place/textsearch/json?query={sorgu}&key={API_KEY}&language=tr"
     try:
-        response = requests.get(url).json()
-        return response.get('results', [])
+        r = requests.get(url).json()
+        return r.get("results", [])
     except:
         return []
 
-def telefon_bul(place_id):
-    url = f"https://maps.googleapis.com/maps/api/place/details/json?place_id={place_id}&fields=formatted_phone_number&key={API_KEY}&language=tr"
-    try:
-        res = requests.get(url).json()
-        return res.get('result', {}).get('formatted_phone_number', '')
-    except:
-        return ''
-
-# 5. ARAMA ARAYÜZÜ
+# 5. ARAYÜZ
 st.write("---")
-c1, c2 = st.columns([2, 1])
-with c1:
-    arama = st.text_input("Ne arıyorsunuz?", placeholder="Matkap, dübel, bant...", label_visibility="collapsed")
-with c2:
-    yer = st.text_input("Şehir/İlçe", value="İstoç", label_visibility="collapsed")
+arama = st.text_input("Ne arıyorsunuz?", placeholder="Örn: Matkap, Vida...")
+lokasyon = st.text_input("Nerede?", value="İstoç")
 
-if st.button("Dükkanları Listele", use_container_width=True):
+if st.button("Dükkanları Bul"):
     if arama:
-        with st.spinner('Dükkanlar getiriliyor...'):
-            sonuclar = dukkan_ara(arama, yer)
-            if sonuclar:
-                st.success(f"{len(sonuclar)} dükkan listelendi.")
-                for dukkan in sonuclar:
-                    with st.container():
-                        st.subheader(f"🏢 {dukkan.get('name')}")
-                        st.write(f"📍 **Adres:** {dukkan.get('formatted_address')}")
-                        st.write(f"⭐ **Puan:** {dukkan.get('rating', 'Yok')}")
-                        
-                        col_btn1, col_btn2 = st.columns(2)
-                        with col_btn1:
-                            map_url = f"https://www.google.com/maps/search/?api=1&query={dukkan.get('name').replace(' ', '+')}"
-                            st.link_button("📍 Haritada Gör", map_url, use_container_width=True)
-                        with col_btn2:
-                            tel = telefon_bul(dukkan.get('place_id'))
-                            if tel:
-                                wa_url = f"https://wa.me/{tel.replace(' ', '').replace('+', '')}?text=Merhaba, {arama} fiyatı alabilir miyim?"
-                                st.link_button("💬 WhatsApp", wa_url, use_container_width=True)
-                            else:
-                                st.button("📞 No Bulunamadı", disabled=True, use_container_width=True)
-                        st.divider()
-            else:
-                st.warning("Sonuç bulunamadı.")
+        sonuclar = dukkan_getir(arama, lokasyon)
+        if sonuclar:
+            st.success(f"{len(sonuclar)} dükkan bulundu!")
+            for dukkan in sonuclar:
+                st.subheader(f"🏢 {dukkan.get('name')}")
+                st.write(f"📍 {dukkan.get('formatted_address')}")
+                st.write(f"⭐ Puan: {dukkan.get('rating', 'Yok')}")
+                
+                # Harita Linki
+                id_ = dukkan.get('place_id')
+                link = f"https://www.google.com/maps/search/?api=1&query=Google&query_place_id={id_}"
+                st.link_button("📍 Konumu Gör", link)
+                st.divider()
+        else:
+            st.warning("Sonuç bulunamadı.")
     else:
-        st.error("Lütfen bir ürün adı yazın.")
+        st.error("Lütfen bir ürün ismi girin.")
