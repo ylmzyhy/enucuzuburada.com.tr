@@ -4,18 +4,37 @@ import requests
 # 1. SAYFA AYARLARI
 st.set_page_config(page_title="En Ucuzu Burada", page_icon="🛒", layout="wide")
 
-# 2. API ANAHTARI
+# 2. KURUMSAL GÖRÜNÜM İÇİN MENÜLERİ GİZLEME (CSS)
+hide_st_style = """
+            <style>
+            #MainMenu {visibility: hidden;}
+            footer {visibility: hidden;}
+            header {visibility: hidden;}
+            .stDeployButton {display:none;}
+            </style>
+            """
+st.markdown(hide_st_style, unsafe_allow_html=True)
+
+# 3. API ANAHTARI
 API_KEY = "AIzaSyDF9hKdF-D7atJJDqV-h56wlB7vgt9eqJE"
 
-# 3. LOGO
-col1, col2, col3 = st.columns([1, 1, 1])
-with col2:
-    try:
-        st.image("logo.png", width=220)
-    except:
-        st.title("🛒 En Ucuzu Burada")
+# 4. LOGO VE ARAMA ALANI (SOLDA VE YAKIN)
+col_logo, col_search, col_loc = st.columns([0.6, 2, 1])
 
-# 4. FONKSİYONLAR
+with col_logo:
+    try:
+        # Logo genişliği 180px, sola yaslı
+        st.image("logo.png", width=180)
+    except:
+        st.subheader("🛒")
+
+with col_search:
+    arama = st.text_input("Ne arıyorsunuz?", placeholder="Örn: Kaynak Makinesi, Matkap...", key="main_search")
+
+with col_loc:
+    yer = st.text_input("Şehir / İlçe seçin", placeholder="Örn: Ankara Ostim...", key="main_loc")
+
+# 5. FONKSİYONLAR
 def dukkan_ara(urun, lokasyon):
     sorgu = f"{urun} {lokasyon}"
     url = f"https://maps.googleapis.com/maps/api/place/textsearch/json?query={sorgu}&key={API_KEY}&language=tr"
@@ -23,23 +42,13 @@ def dukkan_ara(urun, lokasyon):
     return response.get('results', [])
 
 def detay_getir(place_id):
-    # Fotoğraf, Telefon ve Saatler için detay sorgusu
     fields = "formatted_phone_number,opening_hours,international_phone_number,photos"
     url = f"https://maps.googleapis.com/maps/api/place/details/json?place_id={place_id}&fields={fields}&key={API_KEY}&language=tr"
     res = requests.get(url).json()
     return res.get('result', {})
 
-# 5. ARAMA ARAYÜZÜ
-st.write("---")
-c1, c2 = st.columns([2, 1])
-
-with c1:
-    arama = st.text_input("Ne arıyorsunuz?", placeholder="Örn: Kaynak Makinesi, Matkap...")
-
-with c2:
-    yer = st.text_input("Şehir / İlçe seçin", placeholder="Örn: Ankara Ostim, İkitelli...")
-
-if st.button("Dükkanları ve Fiyat Sorulacak Yerleri Bul", use_container_width=True):
+# 6. ARAMA BUTONU VE SONUÇLAR
+if st.button("Dükkanları ve Fiyat Sorulacak Yerleri Bul", use_container_width=True, key="search_btn"):
     if arama and yer:
         with st.spinner('Detaylı bilgiler çekiliyor...'):
             sonuclar = dukkan_ara(arama, yer)
@@ -47,30 +56,22 @@ if st.button("Dükkanları ve Fiyat Sorulacak Yerleri Bul", use_container_width=
             if sonuclar:
                 st.success(f"'{yer}' bölgesinde {len(sonuclar)} yer bulundu.")
                 
-                for dukkan in sonuclar:
+                for idx, dukkan in enumerate(sonuclar):
                     isim = dukkan.get('name')
                     adres = dukkan.get('formatted_address')
-                    puan = dukkan.get('rating', 'Yeni İşletme')
                     pid = dukkan.get('place_id')
                     
-                    # Detayları (Telefon, Saat, Foto) çek
                     detay = detay_getir(pid)
                     tel = detay.get('formatted_phone_number') or detay.get('international_phone_number')
                     saatler = detay.get('opening_hours', {})
                     fotolar = detay.get('photos', [])
                     
                     acik_mi_text = "Bilgi Yok"
-                    calisma_saati = "Belirtilmemiş"
-                    
                     if saatler:
                         acik_mi_text = "✅ ŞİMDİ AÇIK" if saatler.get('open_now') else "❌ ŞİMDİ KAPALI"
-                        gunluk_liste = saatler.get('weekday_text', [])
-                        if gunluk_liste:
-                            calisma_saati = gunluk_liste[0].split(": ", 1)[-1]
 
                     with st.container():
                         st.divider()
-                        # Görsel ve Metni yan yana getirmek için kolonlar
                         col_img, col_txt = st.columns([1, 3])
                         
                         with col_img:
@@ -86,31 +87,27 @@ if st.button("Dükkanları ve Fiyat Sorulacak Yerleri Bul", use_container_width=
                             st.write(f"📍 **Adres:** {adres}")
                             if tel:
                                 st.write(f"📞 **Telefon:** {tel}")
-                            st.write(f"⏰ **Çalışma Saatleri:** {calisma_saati} ({acik_mi_text})")
-                            st.write(f"⭐ **Puan:** {puan}")
+                            st.write(f"⏰ {acik_mi_text}")
                         
-                        # Butonlar
                         b1, b2 = st.columns(2)
                         with b1:
                             harita_link = f"https://www.google.com/maps/search/?api=1&query={isim.replace(' ', '+')}&query_place_id={pid}"
-                            st.link_button("📍 Konum / Yol Tarifi", harita_link, use_container_width=True)
+                            st.link_button("📍 Konum", harita_link, use_container_width=True, key=f"m_{idx}_{pid}")
                         
                         with b2:
                             if tel:
                                 temiz_tel = "".join(filter(str.isdigit, tel))
-                                if temiz_tel.startswith("0"):
-                                    temiz_tel = "9" + temiz_tel
-                                elif not temiz_tel.startswith("90"):
-                                    temiz_tel = "90" + temiz_tel # Türkiye kodu eklemesi
+                                if temiz_tel.startswith("0"): temiz_tel = "9" + temiz_tel
+                                elif not temiz_tel.startswith("90"): temiz_tel = "90" + temiz_tel 
                                 
                                 wa_mesaj = f"Merhaba, {arama} ürünü için fiyat bilgisi alabilir miyim?"
                                 wa_link = f"https://wa.me/{temiz_tel}?text={wa_mesaj}"
-                                st.link_button("💬 WhatsApp'tan Fiyat Sor", wa_link, type="primary", use_container_width=True)
+                                st.link_button("💬 WhatsApp", wa_link, type="primary", use_container_width=True, key=f"w_{idx}_{pid}")
                             else:
-                                st.button("💬 No Mevcut Değil", disabled=True, use_container_width=True)
+                                st.button("📞 No Mevcut Değil", disabled=True, use_container_width=True, key=f"n_{idx}_{pid}")
             else:
                 st.warning("Sonuç bulunamadı.")
     else:
-        st.error("Lütfen tüm alanları doldurun.")
+        st.error("Lütfen alanları doldurun.")
 
 st.caption("© 2025 enucuzuburada.com.tr")
